@@ -11,27 +11,32 @@
 //(* fsm_encoding = "gray" *)
 
 
+// Every net of this module must be declared: an undeclared name is an error instead of a silent
+// 1-bit wire (implicit nets truncated pwm_cfg_*_w and trigger_signals in older versions).
+// The default is restored at the end of the file, so other sources are not affected.
+`default_nettype none
+
 //(* keep_hierarchy = "yes" *)
 module dummy(
-    input clk,rst,
+    input  wire              clk,rst,
     // inputs
-    input  signed   [14-1:0] in1,in2,
-    input                    external_trigger,   // External triger input
+    input  wire signed [14-1:0] in1,in2,
+    input  wire              external_trigger,   // External triger input
 
     // outputs
-    output signed   [14-1:0] out1,out2,
-    output signed   [14-1:0] osc1,osc2,
-    output                   trigger,            // Oscilloscope trigger output
-    output                   digital_modulation, // Modulation for digital otuput
+    output wire signed [14-1:0] out1,out2,
+    output wire signed [14-1:0] osc1,osc2,
+    output wire              trigger,            // Oscilloscope trigger output
+    output wire              digital_modulation, // Modulation for digital otuput
     output reg      [24-1:0] pwm_cfg_a,pwm_cfg_b,pwm_cfg_c,pwm_cfg_d,
     output reg      [32-1:0] osc_ctrl,
 
     // system bus
-    input           [32-1:0] sys_addr        ,  //!< bus address
-    input           [32-1:0] sys_wdata       ,  //!< bus write data
-    input           [ 4-1:0] sys_sel         ,  //!< bus write byte select
-    input                    sys_wen         ,  //!< bus write enable
-    input                    sys_ren         ,  //!< bus read enable
+    input  wire     [32-1:0] sys_addr        ,  //!< bus address
+    input  wire     [32-1:0] sys_wdata       ,  //!< bus write data
+    input  wire     [ 4-1:0] sys_sel         ,  //!< bus write byte select
+    input  wire              sys_wen         ,  //!< bus write enable
+    input  wire              sys_ren         ,  //!< bus read enable
     output reg      [32-1:0] sys_rdata       ,  //!< bus read data
     output reg               sys_err         ,  //!< bus error indicator
     output reg               sys_ack            //!< bus acknowledge signal
@@ -41,15 +46,8 @@ module dummy(
 
 
     // [WIREREG DOCK]
-    // dummy --------------------------
-    reg                  checkboxA,checkboxB,buttonA,buttonB;
-    reg         [ 3-1:0] read_ctrl;
-    reg         [ 4-1:0] comboA,comboB;
-    reg  signed [14-1:0] numberA,numberB;
-    wire signed [14-1:0] monitorA,monitorB;
-    wire signed [27-1:0] monitorC,monitorD;
-
     // inout --------------------------
+    reg         [ 3-1:0] read_ctrl;
     wire        [12-1:0] slow_out1,slow_out2,slow_out3,slow_out4;
     wire signed [14-1:0] oscA,oscB;
 
@@ -64,7 +62,9 @@ module dummy(
 
     wire signed [14-1:0] slow_out1_14,slow_out2_14,slow_out3_14,slow_out4_14 ;
     wire        [16-1:0] slow_out1_au,slow_out2_au,slow_out3_au,slow_out4_au ;
-    wire        [24-1:0] slow_out1_aux,slow_out2_aux,slow_out3_aux,slow_out4_aux ;
+    wire        [32-1:0] slow_out1_aux,slow_out2_aux,slow_out3_aux,slow_out4_aux ; // 32 bits = pipe_mult pdt
+    wire        [24-1:0] pwm_cfg_a_w,pwm_cfg_b_w,pwm_cfg_c_w,pwm_cfg_d_w ;          // slow DAC (PWM) configuration
+    wire        [ 8-1:0] trigger_signals ;                                          // inputs of the Ext Trig selector
 
     //////////////////////////////////////////////////////////////////////////////////
     //                                                                              //
@@ -357,6 +357,9 @@ module dummy(
     */
     assign     slow_out1_14 = 14'b10000000000000 ;
     assign     slow_out2_14 = 14'b10000000000000 ;
+    // slow_out1/2: muxers disabled above, outputs at 0 V
+    assign     slow_out1    = 12'd0 ;
+    assign     slow_out2    = 12'd0 ;
 
 
     muxer_reg4  #(.RES(14)) slow_out3_sw_m (
@@ -415,6 +418,9 @@ module dummy(
     aDACdecoder i_aDACdecoder_d (  .clk(clk), .rst(rst), .in(slow_out4),  .out(pwm_cfg_d_w)  );
 
 
+    // Digital modulation output (exp_n_io[7]): not used by the template
+    assign     digital_modulation = 1'b0 ;
+
     // -----------------------------------------------------------------------------------------
     // External Trigger  selection
     // -----------------------------------------------------------------------------------------
@@ -466,14 +472,6 @@ module dummy(
         slow_out2_sw           <=   4'd0     ; // switch for muxer slow_out2
         slow_out3_sw           <=   4'd0     ; // switch for muxer slow_out3
         slow_out4_sw           <=   4'd0     ; // switch for muxer slow_out4
-        comboA                 <=   4'd0     ; // Added automatically by script
-        comboB                 <=   4'd0     ; // Added automatically by script
-        numberA                <=  14'd0     ; // Added automatically by script
-        numberB                <=  14'd0     ; // Added automatically by script
-        checkboxA              <=   1'd0     ; // Added automatically by script
-        checkboxB              <=   1'd0     ; // Added automatically by script
-        buttonA                <=   1'd0     ; // Added automatically by script
-        buttonB                <=   1'd0     ; // Added automatically by script
         read_ctrl              <=   3'd0     ; // [unused,start_clk,Freeze]
     end else begin
         if (sys_wen) begin
@@ -497,19 +495,7 @@ module dummy(
           //if (sys_addr[19:0]==20'h00044)  slow_out4             <=  sys_wdata[12-1: 0] ; // signal for RP slow DAC 4
           //if (sys_addr[19:0]==20'h00048)  oscA                  <=  sys_wdata[14-1: 0] ; // signal for Oscilloscope Channel A
           //if (sys_addr[19:0]==20'h0004C)  oscB                  <=  sys_wdata[14-1: 0] ; // signal for Oscilloscope Channel B
-            if (sys_addr[19:0]==20'h00050)  comboA                <=  sys_wdata[ 4-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h00054)  comboB                <=  sys_wdata[ 4-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h00058)  numberA               <=  sys_wdata[14-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h0005C)  numberB               <=  sys_wdata[14-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h00060)  checkboxA             <= |sys_wdata[32-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h00064)  checkboxB             <= |sys_wdata[32-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h00068)  buttonA               <= |sys_wdata[32-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h0006C)  buttonB               <= |sys_wdata[32-1: 0] ; // Added automatically by script
-          //if (sys_addr[19:0]==20'h00070)  monitorA              <=  sys_wdata[14-1: 0] ; // Added automatically by script
-          //if (sys_addr[19:0]==20'h00074)  monitorB              <=  sys_wdata[14-1: 0] ; // Added automatically by script
-          //if (sys_addr[19:0]==20'h00078)  monitorC              <=  sys_wdata[27-1: 0] ; // Added automatically by script
-          //if (sys_addr[19:0]==20'h0007C)  monitorD              <=  sys_wdata[27-1: 0] ; // Added automatically by script
-            if (sys_addr[19:0]==20'h00080)  read_ctrl             <=  sys_wdata[ 3-1: 0] ; // [unused,start_clk,Freeze]
+            if (sys_addr[19:0]==20'h00050)  read_ctrl             <=  sys_wdata[ 3-1: 0] ; // [unused,start_clk,Freeze]
         end
     end
     //---------------------------------------------------------------------------------
@@ -545,22 +531,12 @@ module dummy(
             20'h00044 : begin sys_ack <= sys_en;  sys_rdata <= {  20'b0                   ,        slow_out4  }; end // signal for RP slow DAC 4
             20'h00048 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{oscA[13]}}          ,             oscA  }; end // signal for Oscilloscope Channel A
             20'h0004C : begin sys_ack <= sys_en;  sys_rdata <= {  {18{oscB[13]}}          ,             oscB  }; end // signal for Oscilloscope Channel B
-            20'h00050 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,           comboA  }; end // Added automatically by script
-            20'h00054 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,           comboB  }; end // Added automatically by script
-            20'h00058 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{numberA[13]}}       ,          numberA  }; end // Added automatically by script
-            20'h0005C : begin sys_ack <= sys_en;  sys_rdata <= {  {18{numberB[13]}}       ,          numberB  }; end // Added automatically by script
-            20'h00060 : begin sys_ack <= sys_en;  sys_rdata <= {  31'b0                   ,        checkboxA  }; end // Added automatically by script
-            20'h00064 : begin sys_ack <= sys_en;  sys_rdata <= {  31'b0                   ,        checkboxB  }; end // Added automatically by script
-            20'h00068 : begin sys_ack <= sys_en;  sys_rdata <= {  31'b0                   ,          buttonA  }; end // Added automatically by script
-            20'h0006C : begin sys_ack <= sys_en;  sys_rdata <= {  31'b0                   ,          buttonB  }; end // Added automatically by script
-            20'h00070 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{monitorA[13]}}      ,         monitorA  }; end // Added automatically by script
-            20'h00074 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{monitorB[13]}}      ,         monitorB  }; end // Added automatically by script
-            20'h00078 : begin sys_ack <= sys_en;  sys_rdata <= {  { 5{monitorC[26]}}      ,         monitorC  }; end // Added automatically by script
-            20'h0007C : begin sys_ack <= sys_en;  sys_rdata <= {  { 5{monitorD[26]}}      ,         monitorD  }; end // Added automatically by script
-            20'h00080 : begin sys_ack <= sys_en;  sys_rdata <= {  29'b0                   ,        read_ctrl  }; end // [unused,start_clk,Freeze]
+            20'h00050 : begin sys_ack <= sys_en;  sys_rdata <= {  29'b0                   ,        read_ctrl  }; end // [unused,start_clk,Freeze]
             default   : begin sys_ack <= sys_en;  sys_rdata <=  32'h0        ; end
         endcase
     end
     // [FPGA MEMORY DOCK END]
 
 endmodule
+
+`default_nettype wire

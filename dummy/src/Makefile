@@ -4,29 +4,48 @@ RM=rm
 OBJECTS=main.o fpga.o worker.o calib.o fpga_awg.o generate.o fpga_pid.o pid.o fpga_dummy.o dummy.o
 
 CFLAGS+= -Wall -Werror -g -fPIC $(INCLUDE)
-LDFLAGS=-shared
+# -lm: round/ceil/sqrt...; -lpthread: worker thread and mutexes (explicit, so that controllerhf.so
+# does not depend on the libraries the server happens to have loaded)
+LDFLAGS=-shared -lm -lpthread
 
 CONTROLLER     = ../controllerhf.so
 CONTROLLER_DBG = ../controllerhf_dbg.so
 CONTROLLER_RLD = ../controllerhf_rld.so
 
+# Each controller is compiled into its own object folder, with its own defines:
+#   controllerhf.so      normal
+#   controllerhf_dbg.so  -DDEBUG=1  (TRACE() messages on stderr, see main.h)
+#   controllerhf_rld.so  -DRELOAD   (does not write the dummy registers on start, see main.c)
+# (Before, the sources were edited with sed after the objects were compiled: the three .so were identical.)
+OBJ_N = $(addprefix obj/,$(OBJECTS))
+OBJ_D = $(addprefix obj_dbg/,$(OBJECTS))
+OBJ_R = $(addprefix obj_rld/,$(OBJECTS))
+HEADERS = $(wildcard *.h)
+
 all: $(CONTROLLER)
 
-$(CONTROLLER): $(OBJECTS)
-	$(CC) -o $(CONTROLLER) $(OBJECTS) $(CFLAGS) $(LDFLAGS)
-	-$(RM) -f $(OBJECTS)
+obj/%.o: %.c $(HEADERS)
+	@mkdir -p obj
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(CONTROLLER_DBG): $(OBJECTS)
-	sed 's?/* *#define DEBUG 1.*?#define DEBUG 1? ' -i main.h
-	$(CC) -o $(CONTROLLER_DBG) $(OBJECTS) $(CFLAGS) $(LDFLAGS)
-	-$(RM) -f $(OBJECTS)
-	sed 's?/* *#define DEBUG 1.*?// #define DEBUG 1? ' -i main.h
+obj_dbg/%.o: %.c $(HEADERS)
+	@mkdir -p obj_dbg
+	$(CC) $(CFLAGS) -DDEBUG=1 -c -o $@ $<
 
-$(CONTROLLER_RLD): $(OBJECTS)
-	sed "s?/\\*RELOAD_DOCK_START\\*/.*/\\*RELOAD_DOCK_END\\*/?/*RELOAD_DOCK_START*/ PARAMS_DUMMY_PARAMS - 1 /*RELOAD_DOCK_END*/?"  -i main.c
-	$(CC) -o $(CONTROLLER_RLD) $(OBJECTS) $(CFLAGS) $(LDFLAGS)
-	-$(RM) -f $(OBJECTS)
-	sed "s?/\\*RELOAD_DOCK_START\\*/.*/\\*RELOAD_DOCK_END\\*/?/*RELOAD_DOCK_START*/ PARAMS_NUM /*RELOAD_DOCK_END*/?"  -i main.c
+obj_rld/%.o: %.c $(HEADERS)
+	@mkdir -p obj_rld
+	$(CC) $(CFLAGS) -DRELOAD -c -o $@ $<
+
+$(CONTROLLER): $(OBJ_N)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+
+$(CONTROLLER_DBG): $(OBJ_D)
+	$(CC) -o $@ $^ $(CFLAGS) -DDEBUG=1 $(LDFLAGS)
+
+$(CONTROLLER_RLD): $(OBJ_R)
+	$(CC) -o $@ $^ $(CFLAGS) -DRELOAD $(LDFLAGS)
 
 clean:
-	-$(RM) -f $(OBJECTS)
+	-$(RM) -rf obj obj_dbg obj_rld *.o
+
+.PHONY: all clean

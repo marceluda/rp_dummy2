@@ -49,7 +49,7 @@ typedef struct rp_osc_meas_res_s {
 /* Parameters indexes - these defines should be in the same order as
  * rp_app_params_t structure defined in main.c */
 //define PARAMS_NUM        81
-#define PARAMS_NUM        109
+#define PARAMS_NUM        105
 #define MIN_GUI_PARAM     0
 #define MAX_GUI_PARAM     1
 #define TRIG_MODE_PARAM   2
@@ -159,11 +159,7 @@ typedef struct rp_osc_meas_res_s {
 #define DUMMY_SLOW_OUT4                 101
 #define DUMMY_OSCA                      102
 #define DUMMY_OSCB                      103
-#define DUMMY_CNT_CLK                   104
-#define DUMMY_CNT_CLK2                  105
-#define DUMMY_READ_CTRL                 106
-#define DUMMY_AUX_A                     107
-#define DUMMY_AUX_B                     108
+#define DUMMY_READ_CTRL                 104
 
 // [MAINDEFH DOCK END]
 

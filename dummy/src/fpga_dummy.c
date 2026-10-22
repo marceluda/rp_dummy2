@@ -74,7 +74,7 @@ int __dummy_cleanup_mem(void)
 
 // [FPGARESET DOCK]
 /** Reset all DUMMY */
-void reset_dummy(void)
+void reset_locks(void)
 {
     if (g_dummy_reg) {
         g_dummy_reg->oscA_sw              =      1;
@@ -97,11 +97,7 @@ void reset_dummy(void)
         g_dummy_reg->slow_out4            =      0;
         g_dummy_reg->oscA                 =      0;
         g_dummy_reg->oscB                 =      0;
-        g_dummy_reg->cnt_clk              =      0;
-        g_dummy_reg->cnt_clk2             =      0;
         g_dummy_reg->read_ctrl            =      0;
-        g_dummy_reg->aux_A                =      0;
-        g_dummy_reg->aux_B                =      0;
     }
 }
 // [FPGARESET DOCK END]

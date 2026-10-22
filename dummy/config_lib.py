@@ -104,8 +104,8 @@ class fpga_registers():
         print('set_py_global_config(): configuration of python scripts for remote comunication')
         self.py_global_config=[]
         self.py_global_config.append(
-                html_global_config( regex_start = ' *# *\[REGSET DOCK\] *',
-                                    regex_end   = ' *# *\[REGSET DOCK END\]',
+                html_global_config( regex_start = r' *# *\[REGSET DOCK\] *',
+                                    regex_end   = r' *# *\[REGSET DOCK END\]',
                                     text        = '# [REGSET DOCK]\n'+self.print_hugo(ret=True)+'# [REGSET DOCK END]\n' )
                 )
 
@@ -489,8 +489,8 @@ class html_registers():
         txt=('\n'.join(txt))
 
         self.html_global_configs.append(
-                html_global_config( regex_start = ' *var *switches *= *\[',
-                                    regex_end   = '.*\] *;.*',
+                html_global_config( regex_start = r' *var *switches *= *\[',
+                                    regex_end   = r'.*\] *;.*',
                                     text        =  txt)
                 )
 
@@ -529,13 +529,15 @@ class html_registers():
             tmp=tmp[0:-1]
             tmp+="];"
             txt.append(tmp)
+        elif len(txt)==0:
+            txt.append("var input_number=[];")   # no number controls
         else:
             txt[-1]=txt[-1][0:-2]+"];"
         txt=('\n'.join(txt))
 
         self.html_global_configs.append(
-                html_global_config( regex_start = ' *var *input_number *= *\[',
-                                    regex_end   = '.*\] *;.*',
+                html_global_config( regex_start = r' *var *input_number *= *\[',
+                                    regex_end   = r'.*\] *;.*',
                                     text        =  txt)
                 )
 
@@ -545,21 +547,21 @@ class html_registers():
         txt.append('// [LOLO DOCK LOADPARAMS]')
 
         txt.append('// Checkboxes')
-        max_len=3+max([ len(y.name) for y in filter( lambda x: x.type=='checkbox' , self) ])
+        max_len=3+max([ len(y.name) for y in filter( lambda x: x.type=='checkbox' , self) ], default=0)
         for i in [ y.name for y in filter( lambda x: x.type=='checkbox' , self) ]:
             tmp="$({:<"+str(max_len)+"s}).prop('checked', (params.original.{:<"+str(max_len)+"s} ? true : false));"
             txt.append( tmp.format( "'#"+i+"'" , i ) )
         txt.append('')
 
         txt.append('// Numbers')
-        max_len=3+max([ len(y.name) for y in filter( lambda x: x.type=='number' , self) ])
+        max_len=3+max([ len(y.name) for y in filter( lambda x: x.type=='number' , self) ], default=0)
         for i in [ y.name for y in filter( lambda x: x.type=='number' , self) ]:
             tmp="$({:<"+str(max_len)+"s}).val(params.original.{:<"+str(max_len)+"s});"
             txt.append( tmp.format( "'#"+i+"'" , i ) )
         txt.append('')
 
         txt.append('// Switches')
-        max_len=3+max([ len(y.name) for y in filter( lambda x: x.type=='select' , self) ])
+        max_len=3+max([ len(y.name) for y in filter( lambda x: x.type=='select' , self) ], default=0)
         for i in [ y.name for y in filter( lambda x: x.type=='select' , self) ]:
             tmp="$({:<"+str(max_len)+"s}).val(params.original.{:<"+str(max_len)+"s});"
             txt.append( tmp.format( "'#"+i+"'" , i ) )
@@ -579,8 +581,8 @@ class html_registers():
         txt=('\n'.join(txt))
 
         self.html_global_configs.append(
-                html_global_config( regex_start = ' *// *\[LOLO DOCK LOADPARAMS\].*',
-                                    regex_end   = '.*// *\[LOLO DOCK LOADPARAMS END\].*',
+                html_global_config( regex_start = r' *// *\[LOLO DOCK LOADPARAMS\].*',
+                                    regex_end   = r'.*// *\[LOLO DOCK LOADPARAMS END\].*',
                                     text        =  txt)
                 )
 
@@ -613,7 +615,7 @@ class txt_buff():
     def indent_minus(self):
         self.n     -= 1
     def nl(self):
-        self.txt+=self.indent*self.n+self.end
+        self.txt+=self.end   # empty line, without trailing spaces
 
 
 def fpga_reg_write(f,indent=1):
@@ -1104,11 +1106,11 @@ class input_button():
 def parse_sw(val):
     values=[
              ['in1_m_in2.*','in1-in2'],
-             ['pid(\w)_out.*','PID \\1 out'],
-             ["14'b1?0+\s*",'0'],
+             [r'pid(\w)_out.*','PID \\1 out'],
+             [r"14'b1?0+\s*",'0'],
              [".*sq_([a-z]*)_b.*",'square \\1 (bin)'],
-             ['ramp_(\w)','Ramp \\1'],
-             ['error_\w*', 'error']
+             [r'ramp_(\w)','Ramp \\1'],
+             [r'error_\w*', 'error']
          ]
     for i in values:
         if bool(re.match(i[0],val)):
@@ -1126,7 +1128,7 @@ def get_muxer(filename,name):
             lin=line.strip(' \n\t')
             if '//' in lin:
                 lin=lin[0:lin.find('//')]
-            if bool(re.match('.*muxer.*\(',lin)):
+            if bool(re.match(r'.*muxer.*\(',lin)):
                 out=True
             if out:
                 #print(lin)
@@ -1136,7 +1138,7 @@ def get_muxer(filename,name):
                 out=False
                 tmp=''.join(txt)
                 txt=[]
-                if bool(re.match('.*sel *\( *'+name+' *\).*',tmp)):
+                if bool(re.match(r'.*sel *\( *'+name+r' *\).*',tmp)):
                     sel=tmp
                 #txt=[]
         txt=sel.split(')')
@@ -1144,7 +1146,7 @@ def get_muxer(filename,name):
         for i in txt:
             i=i.strip(' \n\t')
             if '.in' in i:
-                ii=re.search('.*\((.*)',i)
+                ii=re.search(r'.*\((.*)',i)
                 ret.append( parse_sw( ii.group(1).strip(' \n\t')  ))
         #print( '["' + '","'.join(ret) + '"]')
         return ret

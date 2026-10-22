@@ -61,6 +61,12 @@
  *
  */
 
+// Optional blocks of the template. new_project.py comments out the defines that are disabled in the
+// [general] section of the .ini (include_genfun / include_pids). Without the block, its bus slot is
+// answered by a stub (ack=1, err=0, rdata=0): a slot without driver hangs the bus (SIGBUS in nginx).
+`define INCLUDE_GENFUN   // [include_genfun]
+`define INCLUDE_PIDS     // [include_pids]
+
 module red_pitaya_top (
    // PS connections
    inout  [54-1: 0] FIXED_IO_mio       ,
@@ -480,7 +486,7 @@ red_pitaya_scope i_scope (
 //  DAC arbitrary signal generator
 
 
-/* include_genfun disabled by LOLO */
+`ifdef INCLUDE_GENFUN
 
 red_pitaya_asg i_asg (
    // DAC
@@ -501,9 +507,9 @@ red_pitaya_asg i_asg (
   .sys_err         (  sys_err[2]                 ),  // error indicator
   .sys_ack         (  sys_ack[2]                 )   // acknowledge signal
 );
-/* */
 
-/* include_genfun enable
+`else  // no ASG: stub for bus slot 2 (0x402xxxxx)
+
 assign sys_rdata[2*32+:32] = 32'h0;
 assign sys_err  [2       ] =  1'b0;
 assign sys_ack  [2       ] =  1'b1;
@@ -511,12 +517,13 @@ assign sys_ack  [2       ] =  1'b1;
 assign asg_a = 14'b0;
 assign asg_b = 14'b0;
 assign trig_asg_out = 1'b0 ;
-/* */
+
+`endif // INCLUDE_GENFUN
 
 //---------------------------------------------------------------------------------
 //  MIMO PID controller
 
-/* include_pids disabled by LOLO */
+`ifdef INCLUDE_PIDS
 
 red_pitaya_pid i_pid (
    // signals
@@ -536,16 +543,17 @@ red_pitaya_pid i_pid (
   .sys_err         (  sys_err[3]                 ),  // error indicator
   .sys_ack         (  sys_ack[3]                 )   // acknowledge signal
 );
-/* */
 
-/* include_pids enable
+`else  // no PIDs: stub for bus slot 3 (0x403xxxxx)
+
 assign sys_rdata[3*32+:32] = 32'h0;
 assign sys_err  [3       ] =  1'b0;
 assign sys_ack  [3       ] =  1'b1;
 
 assign pid_a = 14'b0;
 assign pid_b = 14'b0;
-/* */
+
+`endif // INCLUDE_PIDS
 
 //---------------------------------------------------------------------------------
 //  Analog mixed signals

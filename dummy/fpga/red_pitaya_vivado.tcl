@@ -80,6 +80,29 @@ read_verilog                      $path_rtl/dummy.v
 
 # Automatically added dummy modules
 
+read_verilog                      $path_rtl/dummy/filtro_pasabajos.v
+read_verilog                      $path_rtl/dummy/gen_ramp.v
+read_verilog                      $path_rtl/dummy/fun_icdf.v
+read_verilog                      $path_rtl/dummy/filtro_pasaaltos.v
+read_verilog                      $path_rtl/dummy/trigger_input.v
+read_verilog                      $path_rtl/dummy/muxer4.v
+read_verilog                      $path_rtl/dummy/UniversalCounter.v
+read_verilog                      $path_rtl/dummy/debounce.v
+read_verilog                      $path_rtl/dummy/aDACdecoder.v
+read_verilog                      $path_rtl/dummy/sum_2N.v
+read_verilog                      $path_rtl/dummy/fun_pico.v
+read_verilog                      $path_rtl/dummy/muxer_reg3.v
+read_verilog                      $path_rtl/dummy/muxer3.v
+read_verilog                      $path_rtl/dummy/signo.v
+read_verilog                      $path_rtl/dummy/gen_mod.v
+read_verilog                      $path_rtl/dummy/muxer_reg5.v
+read_verilog                      $path_rtl/dummy/satprotect.v
+read_verilog                      $path_rtl/dummy/muxer5.v
+read_verilog                      $path_rtl/dummy/mult_dsp_14.v
+read_verilog                      $path_rtl/dummy/rand_gen_uni.v
+read_verilog                      $path_rtl/dummy/pipe_mult.v
+read_verilog                      $path_rtl/dummy/muxer_reg4.v
+
 
 # End of automatic part
 

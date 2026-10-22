@@ -112,11 +112,7 @@ int dummy_update(rp_app_params_t *params)
   //g_dummy_reg->slow_out4                 = (int)params[DUMMY_SLOW_OUT4               ].value;
   //g_dummy_reg->oscA                      = (int)params[DUMMY_OSCA                    ].value;
   //g_dummy_reg->oscB                      = (int)params[DUMMY_OSCB                    ].value;
-  //g_dummy_reg->cnt_clk                   = (int)params[DUMMY_CNT_CLK                 ].value;
-  //g_dummy_reg->cnt_clk2                  = (int)params[DUMMY_CNT_CLK2                ].value;
     g_dummy_reg->read_ctrl                 = (int)params[DUMMY_READ_CTRL               ].value;
-    g_dummy_reg->aux_A                     = (int)params[DUMMY_AUX_A                   ].value;
-    g_dummy_reg->aux_B                     = (int)params[DUMMY_AUX_B                   ].value;
   // [FPGAUPDATE DOCK END]
 
     return 0;
@@ -176,11 +172,7 @@ int dummy_update_main(rp_app_params_t *params)
     params[101].value = (float)g_dummy_reg->slow_out4            ; // dummy_slow_out4
     params[102].value = (float)g_dummy_reg->oscA                 ; // dummy_oscA
     params[103].value = (float)g_dummy_reg->oscB                 ; // dummy_oscB
-    params[104].value = (float)g_dummy_reg->cnt_clk              ; // dummy_cnt_clk
-    params[105].value = (float)g_dummy_reg->cnt_clk2             ; // dummy_cnt_clk2
-    params[106].value = (float)g_dummy_reg->read_ctrl            ; // dummy_read_ctrl
-    params[107].value = (float)g_dummy_reg->aux_A                ; // dummy_aux_A
-    params[108].value = (float)g_dummy_reg->aux_B                ; // dummy_aux_B
+    params[104].value = (float)g_dummy_reg->read_ctrl            ; // dummy_read_ctrl
     // [PARAMSUPDATE DOCK END]
 
     return 0;

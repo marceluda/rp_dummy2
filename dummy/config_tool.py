@@ -34,7 +34,7 @@ cwd = os.getcwd()
 os.chdir(folder)
 
 AppName = folder.split( os.sep )[-1]
-if not AppName[0:6]=='dummy_':
+if not ( AppName=='dummy' or AppName[0:6]=='dummy_' ):
     print('not dummy_NAME folder')
     exit(1)
 

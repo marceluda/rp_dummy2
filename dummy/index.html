@@ -115,7 +115,7 @@
                        'max_y,prb_att_ch1,gain_ch1,prb_att_ch2,gain_ch2,gui_xmin,gui_xmax,'+
                        'dummy_oscA_sw,dummy_oscB_sw,dummy_osc1_filt_off,dummy_osc2_filt_off,dummy_osc_raw_mode,dummy_osc_lockin_mode,'+
                        'dummy_trig_sw,dummy_out1_sw,dummy_out2_sw,dummy_slow_out1_sw,dummy_slow_out2_sw,dummy_slow_out3_sw,dummy_slow_out4_sw,'+
-                       'dummy_read_ctrl,dummy_aux_A,dummy_aux_B';
+                       'dummy_read_ctrl';
 
   config_params_keys = config_params_txts.split(",");
 
@@ -1152,7 +1152,7 @@
     // [LOLO DOCK PAGELOAD]
 
     // Number inputs
-    var input_number=['dummy_aux_A','dummy_aux_B'];
+    var input_number=[];
 
     for(ii in input_number){
       $('#'+input_number[ii])
@@ -2736,11 +2736,9 @@
     // Checkboxes
     $('#dummy_osc1_filt_off').prop('checked', (params.original.dummy_osc1_filt_off    ? true : false));
     $('#dummy_osc2_filt_off').prop('checked', (params.original.dummy_osc2_filt_off    ? true : false));
-
+    
     // Numbers
-    $('#dummy_aux_A').val(params.original.dummy_aux_A   );
-    $('#dummy_aux_B').val(params.original.dummy_aux_B   );
-
+    
     // Switches
     $('#dummy_oscA_sw'     ).val(params.original.dummy_oscA_sw        );
     $('#dummy_oscB_sw'     ).val(params.original.dummy_oscB_sw        );
@@ -2752,7 +2750,7 @@
     $('#dummy_slow_out3_sw').val(params.original.dummy_slow_out3_sw   );
     $('#dummy_slow_out4_sw').val(params.original.dummy_slow_out4_sw   );
     $('#dummy_read_ctrl'   ).val(params.original.dummy_read_ctrl      );
-
+    
     // Buttons
     if (params.original.dummy_osc_raw_mode){                // dummy_osc_raw_mode
       $('#dummy_osc_raw_mode').removeClass('btn-default').addClass('btn-primary').data('checked',true);
@@ -2764,7 +2762,7 @@
     }else{
       $('#dummy_osc_lockin_mode').removeClass('btn-primary').addClass('btn-default').data('checked',false);
     }
-
+    
     // [LOLO DOCK LOADPARAMS END]
 
     /* ERASE LOLO

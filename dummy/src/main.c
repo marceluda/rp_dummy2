@@ -300,7 +300,7 @@ static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
     /*********************************************/
 
     // [MAINDEF DOCK]
-    
+
     { "dummy_oscA_sw"                 ,      1, 1, 0,            0,           31 }, /** switch for muxer oscA **/
     { "dummy_oscB_sw"                 ,      2, 1, 0,            0,           31 }, /** switch for muxer oscB **/
     { "dummy_osc1_filt_off"           ,      1, 1, 0,            0,            1 }, /** oscilloscope control osc1_filt_off **/
@@ -324,12 +324,8 @@ static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
     { "dummy_slow_out4"               ,      0, 0, 1,        -2048,         2047 }, /** signal for RP slow DAC 4 **/
     { "dummy_oscA"                    ,      0, 0, 1,        -8192,         8191 }, /** signal for Oscilloscope Channel A **/
     { "dummy_oscB"                    ,      0, 0, 1,        -8192,         8191 }, /** signal for Oscilloscope Channel B **/
-    { "dummy_cnt_clk"                 ,      0, 0, 1,            0,   0xffffffff }, /** Clock count **/
-    { "dummy_cnt_clk2"                ,      0, 0, 1,            0,   0xffffffff }, /** Clock count **/
     { "dummy_read_ctrl"               ,      0, 1, 0,            0,            7 }, /** [unused,start_clk,Freeze] **/
-    { "dummy_aux_A"                   ,      0, 1, 0,        -8192,         8191 }, /** auxiliar value of 14 bits **/
-    { "dummy_aux_B"                   ,      0, 1, 0,        -8192,         8191 }, /** auxiliar value of 14 bits **/
-    
+
     // [MAINDEF DOCK END]
 
     { /* Must be last! */
@@ -389,7 +385,13 @@ int rp_app_init(void)
 
     TRACE("LOLO(rp_app_init): PARAMS_NUM: %d \n", PARAMS_NUM);
 
-    rp_set_params(&rp_main_params[0], /*RELOAD_DOCK_START*/ PARAMS_NUM /*RELOAD_DOCK_END*/ ); // PARAMS_DUMMY_PARAMS
+#ifdef RELOAD
+    /* controllerhf_rld.so (App "_RELOAD", built with -DRELOAD): the registers of the dummy module are
+     * not written on start, so the FPGA keeps its state while the web page is reloaded */
+    rp_set_params(&rp_main_params[0], PARAMS_DUMMY_PARAMS - 1 );
+#else
+    rp_set_params(&rp_main_params[0], PARAMS_NUM );
+#endif
 
     TRACE("LOLO(rp_app_init): END\n");
 

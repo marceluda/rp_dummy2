@@ -253,14 +253,14 @@ if __name__ == '__main__':
     rep = [
         ["var app_id = 'dummy';","var app_id = '"+AppName+"';"],
         ["localStorage\\.lockConfig","localStorage."+AppName+"config"],
-        ['<h2 class="page-title">Oscilloscope\+Dummy</h2>','<h2 class="page-title">'+AppName.replace('_',' ')+'</h2>']
+        [r'<h2 class="page-title">Oscilloscope\+Dummy</h2>','<h2 class="page-title">'+AppName.replace('_',' ')+'</h2>']
     ]
 
     tmp_mon_txt = ','.join([ 'dummy_'+y['name'] for y in filter( lambda x: x['htype']=='monitor', ctrls ) ])
-    rep.append( ["let mon = ''.split\(','\); // Monitor controls vector" ,"let mon = '"+tmp_mon_txt+"'.split(','); // Monitor controls vector" ] )
+    rep.append( [r"let mon = ''.split\(','\); // Monitor controls vector" ,"let mon = '"+tmp_mon_txt+"'.split(','); // Monitor controls vector" ] )
 
     tmp_mon_nbits = ','.join([ ('-' if y['signed'] else '' )+str(y['nbits']) for y in filter( lambda x: x['htype']=='monitor', ctrls ) ])
-    rep.append( ["let nbits = \[\] ; // Monitor controls bit numbers" , "let nbits = ["+tmp_mon_nbits+"] ; // Monitor controls bit numbers" ])
+    rep.append( [r"let nbits = \[\] ; // Monitor controls bit numbers" , "let nbits = ["+tmp_mon_nbits+"] ; // Monitor controls bit numbers" ])
 
     print('Include Signal Generator? : ' + str(include_genfun) )
     if not include_genfun :
@@ -316,16 +316,16 @@ if __name__ == '__main__':
     configtool_file = os.path.join(folder,AppName,'config_tool.py')
     for line in fileinput.input( files=(configtool_file),backup='_'+datetime.now().strftime("%Y%m%d_%H%M%S")+'.bak',inplace=True) :
         line = line.rstrip()
-        if bool(re.match('\s*# Automated added registers',line)):
+        if bool(re.match(r'\s*# Automated added registers',line)):
             line += '\n'
             line += '\n'.join(py_txt)
             line += '\n'
-        if bool(re.match('\s*# Automated added HTML controllers',line)):
+        if bool(re.match(r'\s*# Automated added HTML controllers',line)):
             line += '\n'
             for y in ctrls:
                 line += "h["+ ("'dummy_"+y['name']+"'").ljust(25)+"].type    = '"+y['htype']+"'\n"
             line += '\n'
-        if bool(re.match('\s*# Automatic configuration of HTML controllers',line)):
+        if bool(re.match(r'\s*# Automatic configuration of HTML controllers',line)):
             line += '\n'
             for y in ctrls:
                 if y['htype']=='select':
@@ -346,7 +346,7 @@ if __name__ == '__main__':
             add_cmd = 'add_files'
         else:
             add_cmd = 'read_verilog'
-        if bool(re.match('\s*# Automatically added dummy modules',line)):
+        if bool(re.match(r'\s*# Automatically added dummy modules',line)):
             line += '\n'
             line += add_cmd.ljust(34)+'$path_rtl/dummy.v\n'
             for vfile in [ y.replace(AppName+'/fpga/rtl','$path_rtl') for y in glob(AppName+'/fpga/rtl/dummy/*.v') ]:
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     dummyv_file = os.path.join(folder,AppName,'fpga','rtl','dummy.v')
     for line in fileinput.input( files=(dummyv_file),backup='_'+datetime.now().strftime("%Y%m%d_%H%M%S")+'.bak',inplace=True) :
         line = line.rstrip()
-        if bool(re.match('\s*// \[DOCK_FOR_ADDED_REGS\]',line)):
+        if bool(re.match(r'\s*// \[DOCK_FOR_ADDED_REGS\]',line)):
             line = '\n'
             for y in ctrls:
                 line += '    //   '+y['name'].ljust(10)+'--> {:2d} bits {:s}signed bus ({:>10d} --> {:<10d}) \n'.format(
@@ -378,16 +378,12 @@ if __name__ == '__main__':
     topv_file = os.path.join(folder,AppName,'fpga','rtl','red_pitaya_top.v')
     for line in fileinput.input( files=(topv_file),backup='_'+datetime.now().strftime("%Y%m%d_%H%M%S")+'.bak',inplace=True) :
         line = line.rstrip()
-        if not include_genfun:
-            if bool(re.match('\s*/\*\s*include_genfun disabled by LOLO\s\*/',line)):
-                line = '/* include_genfun disabled by LOLO '
-            if bool(re.match('\s*/\* include_genfun enable',line)):
-                line = '/* include_genfun enable'
-        if not include_pids:
-            if bool(re.match('\s*/\*\sinclude_pids disabled by LOLO\s\*/',line)):
-                line = '/* include_pids disabled by LOLO '
-            if bool(re.match('\s*/\* include_pids enable',line)):
-                line = '/* include_pids enable */'
+        # `define INCLUDE_GENFUN / INCLUDE_PIDS: commented out when the block is disabled (the top
+        # then answers its bus slot with a stub)
+        if not include_genfun and re.match(r'\s*`define\s+INCLUDE_GENFUN\b',line):
+            line = '// ' + line + ' (disabled: include_genfun = False)'
+        if not include_pids and re.match(r'\s*`define\s+INCLUDE_PIDS\b',line):
+            line = '// ' + line + ' (disabled: include_pids = False)'
         print(line)
 
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
