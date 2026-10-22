@@ -9,6 +9,10 @@ dummy/target/
 dummy/src/obj/
 dummy/src/obj_dbg/
 dummy/src/obj_rld/
+dummy/fpga.bit
+dummy/fpga.bit.bin
+dummy/fpga.bif
+dummy/red_pitaya.bit
 dummy/target_dbg/
 dummy/target_rld/
 dummy/fpga/out/

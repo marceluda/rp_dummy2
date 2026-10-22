@@ -50,7 +50,8 @@ EXIT_OK, EXIT_CONFIG, EXIT_USAGE, EXIT_FAIL = 0, 1, 2, 3
 TEMPLATE_IGNORE = shutil.ignore_patterns(
     '__pycache__', '*.pyc', '*.bak', '*.so', '*.o', 'obj', 'obj_dbg', 'obj_rld',
     'target', 'target_dbg', 'target_rld', '.Xil', '.srcs', 'out', 'sdk', 'project',
-    'vivado*.log', 'vivado*.jou', '*.jou', 'usage_statistics_webtalk.*', 'red_pitaya.bit')
+    'vivado*.log', 'vivado*.jou', '*.jou', 'usage_statistics_webtalk.*', 'red_pitaya.bit',
+    'fpga.bit', 'fpga.bit.bin', 'fpga.bif')
 
 # fonts tried for the icon label (the first one installed is used)
 ICON_FONTS = ('DejaVu-Sans-Bold', 'FreeSans-Bold', 'FreeSans-Negrita', 'Liberation-Sans-Bold', 'Helvetica-Bold')
@@ -193,13 +194,13 @@ def generate(cfg, ini_path, project_dir, args):
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
         write_settings(tmp_dir / '_settings.env', cfg)
 
-        say(f'[3/6] App name "{app}": app.ini, index.html, info.json, fpga.conf, upload_app.sh')
+        say(f'[3/6] App name "{app}": app.ini, index.html, info.json, fpga.conf, fpga.sh, nginx.conf, upload_app.sh')
         write_app_ini(ini_path, app_dir / 'app.ini', app)
         js_app = app.replace('\\', '\\\\').replace("'", "\\'")
         storage_key = re.sub(r'[^A-Za-z0-9_]', '_', app) + 'config'
         edits = [
             (r"var app_id = 'dummy';", f"var app_id = '{js_app}';"),
-            (r'localStorage\.lockConfig', f'localStorage.{storage_key}'),
+            (r"var config_storage_key = 'dummyconfig';", f"var config_storage_key = '{storage_key}';"),
             (r'<h2 class="page-title">Oscilloscope\+Dummy</h2>', f'<h2 class="page-title">{app.replace("_", " ")}</h2>'),
         ]
         if not cfg.include_genfun:
@@ -208,7 +209,7 @@ def generate(cfg, ini_path, project_dir, args):
         if not cfg.include_pids:
             edits += [(r'<!-- DISABLE PIDController -->', '<!-- DISABLE PIDController'),
                       (r'// Events binding for PID Controller', '/* DISABLE Events binding for PID Controller')]
-        edit_file(app_dir / 'index.html', edits, count={edits[0][0]: 1})
+        edit_file(app_dir / 'index.html', edits, count={edits[0][0]: 1, edits[1][0]: 1})
         (app_dir / 'fpga.conf').write_text(f'/opt/redpitaya/www/apps/{app}/red_pitaya.bit\n', encoding='utf-8')
         (app_dir / 'info' / 'info.json').write_text('\n'.join([
             '{',
@@ -218,6 +219,10 @@ def generate(cfg, ini_path, project_dir, args):
             '    "description": "Red Pitaya App generated with rp_dummy2 (dummy template: oscilloscope + custom FPGA module)."',
             '}']), encoding='utf-8')
         edit_file(app_dir / 'upload_app.sh', [(r'^APP="dummy"', f'APP="{app}"')], count={r'^APP="dummy"': 1})
+        # Ecosystem 2.0: path of the bitstream loaded by fpga.sh, and the locations of nginx.conf
+        edit_file(app_dir / 'fpga.sh', [(r'/opt/redpitaya/www/apps/dummy/fpga\.bit\.bin', f'/opt/redpitaya/www/apps/{app}/fpga.bit.bin')],
+                  count={r'/opt/redpitaya/www/apps/dummy/fpga\.bit\.bin': 1})
+        edit_file(app_dir / 'nginx.conf', [(r'^(location = )/dummy/', rf'\g<1>/{app}/')], count={r'^(location = )/dummy/': 2})
 
         say(f'[4/6] FPGA blocks of Red Pitaya: signal generator {"included" if cfg.include_genfun else "removed (bus stub)"}, '
             f'PIDs {"included" if cfg.include_pids else "removed (bus stub)"}')
@@ -227,6 +232,13 @@ def generate(cfg, ini_path, project_dir, args):
         if not cfg.include_pids:
             edits.append((r'^(`define\s+INCLUDE_PIDS\b.*)$', r'// \1 (disabled: include_pids = False)'))
         edit_file(app_dir / 'fpga' / 'rtl' / 'red_pitaya_top.v', edits, count={p: 1 for p, _ in edits})
+        # the C controller must not touch the address range of a removed block
+        if not cfg.include_genfun:
+            edit_file(app_dir / 'src' / 'generate.h', [(r'^#define GEN_FPGA_HAS_ASG 1', '#define GEN_FPGA_HAS_ASG 0')],
+                      count={r'^#define GEN_FPGA_HAS_ASG 1': 1})
+        if not cfg.include_pids:
+            edit_file(app_dir / 'src' / 'pid.h', [(r'^#define PID_FPGA_HAS_PID 1', '#define PID_FPGA_HAS_PID 0')],
+                      count={r'^#define PID_FPGA_HAS_PID 1': 1})
 
         if args.no_icon:
             say('[5/6] Icons: not labeled (--no-icon)')

@@ -10,13 +10,19 @@ OPTIND=1         # Reset in case getopts has been used previously in the shell.
 # Initialize our own variables:
 port_number=22
 
-while getopts "p:h?" opt; do
+webonly=false
+
+while getopts "wp:h?" opt; do
     case "$opt" in
     p)  port_number=$OPTARG
         echo "port_number: $port_number"
         ;;
+    w)  webonly=true
+        echo "webonly: $webonly"
+        ;;
     h|\?)
-        echo "${0} [-p port_number] rp-XXXXXX.local "
+        echo "${0} [-w] [-p port_number] rp-XXXXXX.local "
+        echo "   -w : upload only the web interface (index.html, css, js)"
         exit 0
         ;;
 
@@ -110,13 +116,32 @@ txt=( "\nIn the future, you will not need to type the root password again for re
       "\nEn el futuro no necesitarás tipear nuevamente la clave SSH para root. \n")
 echo -e ${txt[$L]}
 
-ssh $RPIP $RPOPTS "PATH_REDPITAYA=/opt/redpitaya /boot/sbin/rw ; rm -rf /opt/redpitaya/www/apps/${APP} ; mkdir -p /opt/redpitaya/www/apps/${APP} "
+# The file system is made writable with the rw script of the OS: /opt/redpitaya/sbin/rw in Ecosystem 2.0,
+# /boot/sbin/rw in 0.9x/1.0 (it needs PATH_REDPITAYA exported).
+RP_RW='export PATH_REDPITAYA=/opt/redpitaya ; if [ -x /opt/redpitaya/sbin/rw ] ; then /opt/redpitaya/sbin/rw ; else /boot/sbin/rw ; fi'
 
-echo -e "\n\n---------------------\n\n"
+if $webonly ; then
 
-scp  ${RPSCP} -r controllerhf.so css js fpga.conf index.html info py red_pitaya.bit  root@${RPIP}:/opt/redpitaya/www/apps/${APP}/
+    ssh $RPIP $RPOPTS "${RP_RW} ; rm -rf /opt/redpitaya/www/apps/${APP}/{index.html,js,css} "
+    echo -e "\n\n---------------------\n\n"
+    scp  ${RPSCP} -r index.html css js root@${RPIP}:/opt/redpitaya/www/apps/${APP}/
 
+else
 
+    ssh $RPIP $RPOPTS "${RP_RW} ; rm -rf /opt/redpitaya/www/apps/${APP} ; mkdir -p /opt/redpitaya/www/apps/${APP} "
+    echo -e "\n\n---------------------\n\n"
+    # Ecosystem 2.0: fpga.sh + fpga.bit.bin (+ nginx.conf). 0.9x/1.0: fpga.conf + red_pitaya.bit.
+    # The _RELOAD package has neither fpga.sh nor bitstreams (it keeps the FPGA loaded): only what exists is sent.
+    FILES="controllerhf.so css js nginx.conf fpga.conf index.html info py"
+    for f in fpga.sh fpga.bit.bin red_pitaya.bit c ; do
+        if [ -e "$f" ]; then FILES="$FILES $f"; fi
+    done
+    scp  ${RPSCP} -r ${FILES} root@${RPIP}:/opt/redpitaya/www/apps/${APP}/
+    if [ -e fpga.sh ]; then
+        ssh $RPIP $RPOPTS "chmod 755 /opt/redpitaya/www/apps/${APP}/fpga.sh"   # Ecosystem 2.0 runs it with system()
+    fi
+
+fi
 
 echo -e "\n\n---------------------\n\n"
 

@@ -10,6 +10,11 @@ source settings.sh      # Vivado 2015.2 + Linaro toolchain (edit the paths if yo
 LANG=C make             # controllerhf.so + FPGA + packages in archive/
 ```
 
+The FPGA is synthesized with Vivado 2015.2 (`red_pitaya.bit`, loaded by Ecosystem 0.9x/1.0 through
+`fpga.conf`). For Ecosystem 2.0 the Makefile converts it with `bootgen` of Vivado 2020.1 into
+`fpga.bit.bin`, loaded by `fpga.sh` (set `BOOTGEN_SETTINGS=.../settings64.sh` if Vivado 2020.1 is not in
+`/tools/Xilinx/Vivado/2020.1`). Both go in the packages, with `nginx.conf` (no cache for `index.html`).
+
 ## Where to write your design
 
 - `@APP@/fpga/rtl/dummy.v`: your logic. The registers of the controls are already declared and connected to

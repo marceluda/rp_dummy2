@@ -1312,7 +1312,7 @@ def update_html_controls(filename,dock,txt):
 def print_html_combo(idd,label,nbits):
     txt='\n'.join([
         '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-        '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+        '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
         '    <div class="form-group">\n'
     ])
     txt+='      <label for="dummy_'+idd+'" class="col-xs-4 control-label">'+label+'</label>\n'
@@ -1335,7 +1335,7 @@ def print_html_number(idd,label,nbits,signed=True):
 
     txt = '\n'.join([
         '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-        '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+        '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
         '    <div class="form-group">\n'
     ])
     txt+='      <label for="dummy_'+idd+'" class="col-xs-4 control-label">'+label+'</label>\n'
@@ -1358,7 +1358,7 @@ def print_html_number(idd,label,nbits,signed=True):
 def print_html_checkbox(idd,label):
     txt = '\n'.join([
         '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-        '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+        '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
         '    <div class="checkbox" style="padding-bottom: 12px;">',
         '      <label class="group-label">\n'
     ])
@@ -1374,7 +1374,7 @@ def print_html_checkbox(idd,label):
 def print_html_button(idd,label):
     txt = '\n'.join([
         '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-        '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+        '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
         '    <div class="form-group text-center">\n'
     ])
     txt+='      <button id="dummy_'+idd+'" class="btn btn-primary btn-lg" data-checked="true" disabled>'+label+'</button>\n'
@@ -1669,7 +1669,7 @@ def html_control_panel(c):
     if c.type == 'combo':
         items = c.options if c.options else [ f'opt{i}' for i in range(2**c.nbits) ]
         lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
                   '    <div class="form-group">',
                   f'      <label for="{idd}" class="col-xs-4 control-label">{c.label}</label>',
                   '      <div class="col-xs-8">',
@@ -1680,7 +1680,7 @@ def html_control_panel(c):
         lines += [ '        </select>', '      </div>', '    </div>', '  </form>', '</div>' ]
     elif c.type == 'number':
         lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
                   '    <div class="form-group">',
                   f'      <label for="{idd}" class="col-xs-4 control-label">{c.label}</label>',
                   '      <div class="col-xs-4 col-sm-8">',
@@ -1690,14 +1690,14 @@ def html_control_panel(c):
                   '        </span>', '      </div>', '    </div>', '  </form>', '</div>' ]
     elif c.type == 'checkbox':
         lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
                   '    <div class="checkbox" style="padding-bottom: 12px;">',
                   '      <label class="group-label">',
                   f'        <input type="checkbox" id="{idd}"{" checked" if c.default else ""}>{c.label}',
                   '      </label>', '    </div>', '  </form>', '</div>' ]
     elif c.type == 'button':
         lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
-                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>',
                   '    <div class="form-group text-center">',
                   f'      <button id="{idd}" class="btn btn-primary btn-lg" data-checked="true" disabled>{c.label}</button>',
                   '    </div>', '  </form>', '</div>' ]

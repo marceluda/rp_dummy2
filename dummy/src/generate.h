@@ -40,6 +40,11 @@ typedef struct awg_param_s {
 
 /** @} */
 
+/* 1 if the FPGA has the signal generator (ASG, bus slot 2 = 0x402xxxxx). new_project.py sets it to 0 when
+ * [general] include_genfun = False: then red_pitaya_top.v answers that slot with a stub (ack=1, rdata=0)
+ * and generate_* never touch that address range (no mmap, no writes). */
+#define GEN_FPGA_HAS_ASG 1
+
 int generate_init(rp_calib_params_t *calib_params);
 int generate_exit(void);
 

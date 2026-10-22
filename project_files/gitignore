@@ -13,6 +13,8 @@ archive/
 @APP@/fpga/project/
 @APP@/fpga/.Xil/
 @APP@/fpga/.srcs/
+@APP@/fpga.bit
+@APP@/fpga.bif
 *.o
 *.so
 *.log

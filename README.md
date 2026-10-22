@@ -102,6 +102,14 @@ source settings.sh
 LANG=C make
 ```
 
+## Ecosystem 2.0
+
+The generated Apps run on Ecosystem 2.0 and on the older 0.9x/1.0. The FPGA is synthesized with Vivado 2015.2
+(`red_pitaya.bit`, loaded by 0.9x/1.0 through `fpga.conf`); `bootgen` of Vivado 2020.1 converts it into
+`fpga.bit.bin`, which Ecosystem 2.0 loads with `fpga.sh`. `nginx.conf` disables the cache of `index.html`.
+The web page sends the parameters in chunks (Ecosystem 2.0 hangs with big POSTs), detects when another client
+takes the board, and restores its state after a restart.
+
 ## Upload testing application to a Red Pitaya device
 
 The file _settings.env of the project (written by new_project.py from [general] rp_host, ssh_opts, scp_opts;
