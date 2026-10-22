@@ -62,28 +62,28 @@ add_files                         $path_rtl/dummy.v
 
 # Automatically added dummy modules
 
-add_files                         $path_rtl/dummy/filtro_pasabajos.v
-add_files                         $path_rtl/dummy/gen_ramp.v
-add_files                         $path_rtl/dummy/fun_icdf.v
-add_files                         $path_rtl/dummy/filtro_pasaaltos.v
-add_files                         $path_rtl/dummy/trigger_input.v
-add_files                         $path_rtl/dummy/muxer4.v
 add_files                         $path_rtl/dummy/UniversalCounter.v
-add_files                         $path_rtl/dummy/debounce.v
 add_files                         $path_rtl/dummy/aDACdecoder.v
-add_files                         $path_rtl/dummy/sum_2N.v
+add_files                         $path_rtl/dummy/debounce.v
+add_files                         $path_rtl/dummy/filtro_pasaaltos.v
+add_files                         $path_rtl/dummy/filtro_pasabajos.v
+add_files                         $path_rtl/dummy/fun_icdf.v
 add_files                         $path_rtl/dummy/fun_pico.v
-add_files                         $path_rtl/dummy/muxer_reg3.v
-add_files                         $path_rtl/dummy/muxer3.v
-add_files                         $path_rtl/dummy/signo.v
 add_files                         $path_rtl/dummy/gen_mod.v
-add_files                         $path_rtl/dummy/muxer_reg5.v
-add_files                         $path_rtl/dummy/satprotect.v
-add_files                         $path_rtl/dummy/muxer5.v
+add_files                         $path_rtl/dummy/gen_ramp.v
 add_files                         $path_rtl/dummy/mult_dsp_14.v
-add_files                         $path_rtl/dummy/rand_gen_uni.v
-add_files                         $path_rtl/dummy/pipe_mult.v
+add_files                         $path_rtl/dummy/muxer3.v
+add_files                         $path_rtl/dummy/muxer4.v
+add_files                         $path_rtl/dummy/muxer5.v
+add_files                         $path_rtl/dummy/muxer_reg3.v
 add_files                         $path_rtl/dummy/muxer_reg4.v
+add_files                         $path_rtl/dummy/muxer_reg5.v
+add_files                         $path_rtl/dummy/pipe_mult.v
+add_files                         $path_rtl/dummy/rand_gen_uni.v
+add_files                         $path_rtl/dummy/satprotect.v
+add_files                         $path_rtl/dummy/signo.v
+add_files                         $path_rtl/dummy/sum_2N.v
+add_files                         $path_rtl/dummy/trigger_input.v
 
 
 # End of automatic part

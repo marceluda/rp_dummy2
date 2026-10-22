@@ -1,0 +1,22 @@
+# Build products of @APP@ (generated with rp_dummy2)
+_settings.env
+_build_number
+archive/
+@APP@/target/
+@APP@/target_dbg/
+@APP@/target_rld/
+@APP@/src/obj/
+@APP@/src/obj_dbg/
+@APP@/src/obj_rld/
+@APP@/fpga/out/
+@APP@/fpga/sdk/
+@APP@/fpga/project/
+@APP@/fpga/.Xil/
+@APP@/fpga/.srcs/
+*.o
+*.so
+*.log
+*.jou
+*.bak
+usage_statistics_webtalk.*
+__pycache__/

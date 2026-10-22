@@ -7,15 +7,26 @@ of community applications for Red Pitaya Project.
 
 # Begin a new project
 
-To start a new project you just need to run the new_project.py script. This script reads
-a config fila and creates a new dummy folder with added HTML controllers, already mapped
-to FPGA Verilog registers.
+Describe the controls of the App in an `.ini` file (see `config.ini`: combo boxes, numbers, checkboxes,
+buttons and read-only monitors) and run `new_project.py` (Python >= 3.8, standard library only;
+ImageMagick is optional, for the icon labels):
 
-`./new_project.py [-c CONFIG] [-u] AppName`
+```
+./new_project.py -n -c my.ini my_app          # check my.ini and print the register map (writes nothing)
+./new_project.py -c my.ini -o ~/rp my_app     # create the project ~/rp/rp_my_app/ with the App my_app/
+./new_project.py -h                           # all the options
+```
 
-Default config file: config.ini
+Every control becomes a register of the FPGA module (`fpga/rtl/dummy.v`), a parameter of the C controller
+and an element of the web page, already connected. The `.ini` is validated before anything is written
+(types, widths, names that clash with the template or with Verilog/C keywords...). The App is created as a
+standalone project folder (root `Makefile`, `settings.sh`, `_settings.env`, `resources/`) and keeps a copy
+of the `.ini` as `<App>/app.ini`: after editing it, `<App>/config_tool.py -a` regenerates the automatic
+parts of the sources.
 
-Edit the config file before running the new_project.py script.
+Register map of the dummy module (`0x40600000`), `[general] register_map`:
+`fixed` (default) template registers at `0x000-0x0FC` and the controls from `0x100`; `legacy` the layout of
+the old generator (controls right after the template registers).
 
 ## Make your circuit design
 
@@ -85,15 +96,16 @@ make clean
 ## Example of compilation / synthesys:
 
 ```
-./new_project.py  NAME
+./new_project.py -o ~/rp NAME
+cd ~/rp/rp_NAME
 source settings.sh
-cd dummy_NAME
-make
+LANG=C make
 ```
 
 ## Upload testing application to a Red Pitaya device
 
-The file rp_dummy/_settings.env  has the parameters for ssh testing upload
+The file _settings.env of the project (written by new_project.py from [general] rp_host, ssh_opts, scp_opts;
+`new_project.py -u` rewrites it) has the parameters for ssh testing upload
 
 It looks like:
 

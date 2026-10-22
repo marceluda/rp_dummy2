@@ -14,6 +14,7 @@
 #define _FPGA_DUMMY_H_
 
 #include <stdint.h>
+#include <stddef.h>   /* offsetof() of the register checks */
 
 /** @defgroup fpga_dummy_h LOCK Controller
  * @{
@@ -22,7 +23,7 @@
 /** Base LOCK FPGA address */
 #define DUMMY_BASE_ADDR 0x40600000
 /** Base LOCK FPGA core size */
-#define DUMMY_BASE_SIZE 0x190
+#define DUMMY_BASE_SIZE 0x1000
 
 /** @brief LOCK FPGA registry structure.
  *
@@ -203,6 +204,29 @@ typedef struct dummy_reg_t {
 
 
 } dummy_reg_t;
+
+/* The struct must match the addresses of the FPGA registers (fpga/rtl/dummy.v) */
+_Static_assert(offsetof(dummy_reg_t, oscA_sw) == 0x000, "dummy_reg_t.oscA_sw must be at 0x000");
+_Static_assert(offsetof(dummy_reg_t, oscB_sw) == 0x004, "dummy_reg_t.oscB_sw must be at 0x004");
+_Static_assert(offsetof(dummy_reg_t, osc_ctrl) == 0x008, "dummy_reg_t.osc_ctrl must be at 0x008");
+_Static_assert(offsetof(dummy_reg_t, trig_sw) == 0x00C, "dummy_reg_t.trig_sw must be at 0x00C");
+_Static_assert(offsetof(dummy_reg_t, out1_sw) == 0x010, "dummy_reg_t.out1_sw must be at 0x010");
+_Static_assert(offsetof(dummy_reg_t, out2_sw) == 0x014, "dummy_reg_t.out2_sw must be at 0x014");
+_Static_assert(offsetof(dummy_reg_t, slow_out1_sw) == 0x018, "dummy_reg_t.slow_out1_sw must be at 0x018");
+_Static_assert(offsetof(dummy_reg_t, slow_out2_sw) == 0x01C, "dummy_reg_t.slow_out2_sw must be at 0x01C");
+_Static_assert(offsetof(dummy_reg_t, slow_out3_sw) == 0x020, "dummy_reg_t.slow_out3_sw must be at 0x020");
+_Static_assert(offsetof(dummy_reg_t, slow_out4_sw) == 0x024, "dummy_reg_t.slow_out4_sw must be at 0x024");
+_Static_assert(offsetof(dummy_reg_t, in1) == 0x028, "dummy_reg_t.in1 must be at 0x028");
+_Static_assert(offsetof(dummy_reg_t, in2) == 0x02C, "dummy_reg_t.in2 must be at 0x02C");
+_Static_assert(offsetof(dummy_reg_t, out1) == 0x030, "dummy_reg_t.out1 must be at 0x030");
+_Static_assert(offsetof(dummy_reg_t, out2) == 0x034, "dummy_reg_t.out2 must be at 0x034");
+_Static_assert(offsetof(dummy_reg_t, slow_out1) == 0x038, "dummy_reg_t.slow_out1 must be at 0x038");
+_Static_assert(offsetof(dummy_reg_t, slow_out2) == 0x03C, "dummy_reg_t.slow_out2 must be at 0x03C");
+_Static_assert(offsetof(dummy_reg_t, slow_out3) == 0x040, "dummy_reg_t.slow_out3 must be at 0x040");
+_Static_assert(offsetof(dummy_reg_t, slow_out4) == 0x044, "dummy_reg_t.slow_out4 must be at 0x044");
+_Static_assert(offsetof(dummy_reg_t, oscA) == 0x048, "dummy_reg_t.oscA must be at 0x048");
+_Static_assert(offsetof(dummy_reg_t, oscB) == 0x04C, "dummy_reg_t.oscB must be at 0x04C");
+_Static_assert(offsetof(dummy_reg_t, read_ctrl) == 0x050, "dummy_reg_t.read_ctrl must be at 0x050");
 // [FPGAREG DOCK END]
 
 

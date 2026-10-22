@@ -1,12 +1,20 @@
 #!/usr/bin/env python3 -B
 # -*- coding: utf-8 -*-
 
-from numpy import unique,ceil
+from math import ceil
+import configparser
+import keyword
 import os
 import enum
 from datetime import datetime
 import re
 import fileinput
+import shutil
+
+
+def unique(values):
+    """Sorted list of the distinct values (replaces numpy.unique, so numpy is not needed)"""
+    return sorted(set(values))
 
 #%% auxiliar
 
@@ -32,7 +40,7 @@ class fpga_register():
         self.addr        = "20'h{:05X}".format(index*4)
         if min_val==0 and max_val==0:
             self.min     =   - 2**(nbits-1) if signed else  0
-            self.min     =     2**(nbits-1) if signed else  2**nbits -1
+            self.max     =     2**(nbits-1)-1 if signed else  2**nbits -1
         else:
             self.min         = min_val
             self.max         = max_val
@@ -84,12 +92,25 @@ class fpga_registers():
         txt += '\n'
         return txt
 
-    def add(self, name, val=0, rw=True,  nbits=14, min_val=0, max_val=0, signed=False, desc='todo',fpga_update=True, group='mix'):
+    def add(self, name, val=0, rw=True,  nbits=14, min_val=0, max_val=0, signed=False, desc='todo',fpga_update=True, group='mix', index=None):
+        """Add a register. index (address/4) defaults to the one after the last register."""
+        if index is None:
+            index = self.next_index()
+        if index in [ r.index for r in self.data ]:
+            raise ValueError(f'fpga_registers.add({name}): address 0x{4*index:03X} already used')
         self.data.append(fpga_register(name=name, val=val, rw=rw, nbits=nbits, group=group,
                                        min_val=min_val, max_val=max_val, signed=signed,
-                                       desc=desc, fpga_update=fpga_update , index=self.len ))
+                                       desc=desc, fpga_update=fpga_update , index=index ))
         self.names.append(name)
         self.len = len(self.names)
+
+    def next_index(self):
+        """Index (address/4) that follows the highest register"""
+        return max([ r.index for r in self.data ], default=-1) + 1
+
+    def end_addr(self):
+        """First byte address after the last register"""
+        return 4*self.next_index()
 
     def update_verilog_files(self,folder):
         fpga_mod_fn = os.path.join('fpga','rtl','dummy.v')
@@ -106,7 +127,7 @@ class fpga_registers():
         self.py_global_config.append(
                 html_global_config( regex_start = r' *# *\[REGSET DOCK\] *',
                                     regex_end   = r' *# *\[REGSET DOCK END\]',
-                                    text        = '# [REGSET DOCK]\n'+self.print_hugo(ret=True)+'# [REGSET DOCK END]\n' )
+                                    text        = '# [REGSET DOCK]\n'+self.print_hugo(ret=True)+'# [REGSET DOCK END]' )
                 )
 
     def update_python_files(self,folder):
@@ -733,7 +754,7 @@ def fpga_defs(f,indent=1):
     """Print verliog reg and wire definitions"""
     txt=txt_buff(n=indent)
 
-    for group in unique([ y.group for y in f ]).tolist():
+    for group in unique([ y.group for y in f ]):
         txt.add('// '+group+' --------------------------')
         # reg Unsigned
         for nbits in unique([ y.nbits for y in filter(lambda x: x.group==group and x.rw==True and x.signed==False and x.write_def==True, f) ]):
@@ -789,6 +810,7 @@ def update_verilog(filename,dock,txt):
     tnow=datetime.now().strftime("%Y%m%d_%H%M%S")
     os.rename(filename,filename.replace('.v','_'+tnow+'.v.bak'))
     os.rename(filename.replace('.v','_.v'),filename)
+    shutil.copymode(filename.replace('.v','_'+tnow+'.v.bak'),filename)
 
 
 def main_update_params(m,indent=1):
@@ -840,7 +862,14 @@ def main_fpga_regs_def(f,indent=0):
     txt.nl()
     txt.indent_plus()
 
-    for r in f:
+    expected = 0   # index of the next word of the struct
+    for r in sorted(f, key=lambda x: x.index):
+        if r.index > expected:
+            # gap in the register map (reserved addresses): keep the struct aligned with the FPGA
+            txt.add(f'/** @brief Offsets 0x{4*expected:03X} - 0x{4*r.index-4:03X}: reserved */')
+            txt.add(f'uint32_t reserved_{4*expected:03X}[{r.index-expected}];')
+            txt.nl()
+        expected = r.index + 1
         txt.add('/** @brief Offset {:s} - {:}'.format(r.addr,r.name))
         for j in r.desc.split('\n'):
             txt.add('  *  '+j)
@@ -860,6 +889,10 @@ def main_fpga_regs_def(f,indent=0):
     txt.indent_minus()
     txt.nl()
     txt.add('} dummy_reg_t;')
+    txt.nl()
+    txt.add('/* The struct must match the addresses of the FPGA registers (fpga/rtl/dummy.v) */')
+    for r in sorted(f, key=lambda x: x.index):
+        txt.add(f'_Static_assert(offsetof(dummy_reg_t, {r.name}) == 0x{4*r.index:03X}, "dummy_reg_t.{r.name} must be at 0x{4*r.index:03X}");')
     return txt.out()
 
 
@@ -925,6 +958,7 @@ def update_main(filename,dock,txt):
 
     os.rename(fn1,fn3)
     os.rename(fn2,fn1)
+    shutil.copymode(fn3,fn1)   # keep the permissions (e.g. exec bit of py/*.py)
 
 
 def replace_pattern(filename,pattern,txt):
@@ -958,6 +992,7 @@ def replace_pattern(filename,pattern,txt):
 
     os.rename(fn1,fn3)
     os.rename(fn2,fn1)
+    shutil.copymode(fn3,fn1)   # keep the permissions (e.g. exec bit of py/*.py)
 
 
 #%% HTML controls
@@ -1207,6 +1242,7 @@ def update_html(filename,h):
 
     os.rename(fn1,fn3)
     os.rename(fn2,fn1)
+    shutil.copymode(fn3,fn1)   # keep the permissions (e.g. exec bit of py/*.py)
 
 
 def update_py(filename,h):
@@ -1240,6 +1276,7 @@ def update_py(filename,h):
 
     os.rename(fn1,fn3)
     os.rename(fn2,fn1)
+    shutil.copymode(fn3,fn1)   # keep the permissions (e.g. exec bit of py/*.py)
 
 
 def update_html_controls(filename,dock,txt):
@@ -1364,6 +1401,359 @@ def update_file_match(filename, tag=('start_tag','stop_tag'), txt=''):
             write_file = True
         if write_file:
             print(line)
+
+
+#%% App description file (app.ini): controls of the App
+#
+# The .ini given to new_project.py is copied into the App as app.ini, and config_tool.py reads it
+# every time it regenerates the App. Format:
+#
+#   [general]
+#   AppName        = my_app          # name of the App (folder, URL, info.json)
+#   include_genfun = False           # original signal generator (ASG) of Red Pitaya
+#   include_pids   = False           # original PID controllers of Red Pitaya
+#   register_map   = fixed           # fixed: template registers at 0x000-0x0FC, controls from 0x100
+#                                    # legacy: controls right after the template registers (old layout)
+#   rp_host / ssh_opts / scp_opts    # for _settings.env (make upload)
+#
+#   [numberA]                        # one section per control = register name in dummy.v
+#   type        = number             # combo | number | checkbox | button | monitor
+#   label       = Number A           # text in the web page
+#   bits_number = 14                 # combo, number, monitor (checkbox/button: always 1)
+#   signed      = True               # number, monitor
+#   default     = 0                  # optional: value after reset (not for monitor)
+#   options     = off, slow, fast    # optional, combo only: text of the options (0, 1, 2...)
+
+CONTROL_TYPES = {
+    # type      : (html type, bits allowed, signed allowed, read only)
+    'combo'     : ('select'  , (1, 8) , False, False),
+    'number'    : ('number'  , (1, 32), True , False),
+    'checkbox'  : ('checkbox', (1, 1) , False, False),
+    'button'    : ('button'  , (1, 1) , False, False),
+    'monitor'   : ('monitor' , (1, 32), True , True ),
+}
+
+# Address (index = address/4) where the controls of the .ini start with register_map = fixed.
+# 0x000-0x0FC is reserved for the registers of the template (see config_tool.py).
+USER_REGS_INDEX = 0x100 // 4
+
+# Names already used in dummy.v / the C controller / the web page by the template, or reserved
+# for registers of next versions (cnt_clk, stream_*)
+RESERVED_NAMES = {
+    'oscA_sw', 'oscB_sw', 'osc_ctrl', 'trig_sw', 'out1_sw', 'out2_sw',
+    'slow_out1_sw', 'slow_out2_sw', 'slow_out3_sw', 'slow_out4_sw',
+    'in1', 'in2', 'out1', 'out2', 'slow_out1', 'slow_out2', 'slow_out3', 'slow_out4', 'oscA', 'oscB',
+    'read_ctrl', 'osc1_filt_off', 'osc2_filt_off', 'osc_raw_mode', 'osc_lockin_mode',
+    'cnt_clk', 'cnt_clk2', 'stream_ip', 'stream_port', 'stream_rate', 'stream_cmd',
+    'clk', 'rst', 'external_trigger', 'osc1', 'osc2', 'trigger', 'digital_modulation',
+    'pwm_cfg_a', 'pwm_cfg_b', 'pwm_cfg_c', 'pwm_cfg_d',
+    'pwm_cfg_a_w', 'pwm_cfg_b_w', 'pwm_cfg_c_w', 'pwm_cfg_d_w', 'trigger_signals',
+    'sys_addr', 'sys_wdata', 'sys_sel', 'sys_wen', 'sys_ren', 'sys_rdata', 'sys_err', 'sys_ack', 'sys_en',
+    'slow_out1_14', 'slow_out2_14', 'slow_out3_14', 'slow_out4_14',
+    'slow_out1_au', 'slow_out2_au', 'slow_out3_au', 'slow_out4_au',
+    'slow_out1_aux', 'slow_out2_aux', 'slow_out3_aux', 'slow_out4_aux',
+}
+
+VERILOG_KEYWORDS = set('''always and assign automatic begin buf bufif0 bufif1 case casex casez cell cmos config
+deassign default defparam design disable edge else end endcase endconfig endfunction endgenerate endmodule
+endprimitive endspecify endtable endtask event for force forever fork function generate genvar highz0 highz1
+if ifnone incdir include initial inout input instance integer join large liblist library localparam
+macromodule medium module nand negedge nmos nor noshowcancelled not notif0 notif1 or output parameter
+pmos posedge primitive pull0 pull1 pulldown pullup pulsestyle_onevent pulsestyle_ondetect rcmos real
+realtime reg release repeat rnmos rpmos rtran rtranif0 rtranif1 scalared showcancelled signed small
+specify specparam strong0 strong1 supply0 supply1 table task time tran tranif0 tranif1 tri tri0 tri1
+triand trior trireg unsigned use uwire vectored wait wand weak0 weak1 while wire wor xnor xor
+logic bit byte int shortint longint struct union enum typedef interface modport class'''.split())
+
+C_KEYWORDS = set('''auto break case char const continue default do double else enum extern float for goto if
+inline int long register restrict return short signed sizeof static struct switch typedef union unsigned
+void volatile while _Bool _Complex _Imaginary'''.split())
+
+JS_RESERVED = set('''arguments await break case catch class const continue debugger default delete do else
+enum eval export extends false finally for function if implements import in instanceof interface let new
+null package private protected public return static super switch this throw true try typeof var void
+while with yield'''.split())
+
+APP_NAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_+-]*$')
+REG_NAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_]*$')
+
+
+class control():
+    """A control of the web page, defined by a section of the .ini, and its register in dummy.v"""
+    def __init__(self, name, ctype, label, nbits=1, signed=False, default=0, options=None):
+        self.name    = name
+        self.type    = ctype
+        self.label   = label
+        self.nbits   = nbits
+        self.signed  = signed
+        self.default = default
+        self.options = options
+        self.htype   = CONTROL_TYPES[ctype][0]
+        self.ro      = CONTROL_TYPES[ctype][3]
+    @property
+    def min(self):
+        return -2**(self.nbits-1) if self.signed else 0
+    @property
+    def max(self):
+        return 2**(self.nbits-1)-1 if self.signed else 2**self.nbits-1
+    def __repr__(self):
+        return f'control({self.name}, {self.type}, {self.nbits} bits, {"signed" if self.signed else "unsigned"})'
+
+
+class app_config():
+    """Contents of an App .ini file, validated"""
+    def __init__(self):
+        self.app_name       = None
+        self.include_genfun = False
+        self.include_pids   = False
+        self.register_map   = 'fixed'
+        self.rp_host        = 'rp-XXXXXX.local'
+        self.ssh_opts       = '-l root -p 22'
+        self.scp_opts       = '-P 22'
+        self.controls       = []
+        self.warnings       = []
+
+
+def _to_bool(txt, what, errors):
+    v = txt.strip().lower()
+    if v in ('1', 'yes', 'true', 'on'):
+        return True
+    if v in ('0', 'no', 'false', 'off'):
+        return False
+    errors.append(f'{what}: "{txt}" is not a boolean (use True or False)')
+    return False
+
+
+def _to_int(txt, what, errors):
+    try:
+        return int(txt.strip(), 0)
+    except ValueError:
+        errors.append(f'{what}: "{txt}" is not an integer')
+        return None
+
+
+def load_app_ini(filename, app_name=None):
+    """Read and validate an App .ini file.
+
+    app_name: if given, it replaces [general] AppName.
+    Returns an app_config. Raises ValueError with the list of every problem found.
+    """
+    if not os.path.isfile(filename):
+        raise ValueError(f'configuration file not found: {filename}')
+    ini = configparser.ConfigParser(inline_comment_prefixes=None)
+    ini.optionxform = str   # keep the case of the keys
+    try:
+        with open(filename, encoding='utf-8') as fd:
+            ini.read_file(fd)
+    except configparser.Error as e:
+        raise ValueError(f'{filename}: {e}'.replace('\n', ' '))
+
+    errors = []
+    cfg = app_config()
+
+    gen = { k.lower(): v for k, v in ini['general'].items() } if ini.has_section('general') else None
+    if gen is None:
+        errors.append('missing section [general]')
+        gen = {}
+    for k in gen:
+        if k not in ('appname', 'include_genfun', 'include_pids', 'register_map', 'rp_host', 'ssh_opts', 'scp_opts'):
+            cfg.warnings.append(f'[general] {k}: unknown key, ignored')
+    cfg.app_name = app_name if app_name else gen.get('appname', '').strip()
+    if not cfg.app_name:
+        errors.append('no App name: give it in the command line or as [general] AppName')
+    elif not APP_NAME_RE.match(cfg.app_name):
+        errors.append(f'App name "{cfg.app_name}": use letters, digits, "_", "+" or "-", starting with a letter')
+    if 'include_genfun' in gen:
+        cfg.include_genfun = _to_bool(gen['include_genfun'], '[general] include_genfun', errors)
+    if 'include_pids' in gen:
+        cfg.include_pids   = _to_bool(gen['include_pids']  , '[general] include_pids'  , errors)
+    cfg.register_map = gen.get('register_map', 'fixed').strip().lower()
+    if cfg.register_map not in ('fixed', 'legacy'):
+        errors.append(f'[general] register_map = {cfg.register_map}: use fixed or legacy')
+    for k in ('rp_host', 'ssh_opts', 'scp_opts'):
+        if k in gen:
+            setattr(cfg, k, gen[k].strip())
+
+    seen = {}
+    for sec in ini.sections():
+        if sec == 'general':
+            continue
+        what = f'[{sec}]'
+        opts = { k.lower(): v for k, v in ini[sec].items() }
+        if not REG_NAME_RE.match(sec):
+            errors.append(f'{what}: the section name is the register name: use letters, digits and "_", starting with a letter')
+        elif sec in RESERVED_NAMES or sec in VERILOG_KEYWORDS or sec in C_KEYWORDS or sec in JS_RESERVED \
+                or keyword.iskeyword(sec):
+            errors.append(f'{what}: "{sec}" is a reserved name (used by the template or a keyword)')
+        elif sec.lower() in seen:
+            # main.h uses DUMMY_<NAME> in upper case: names that differ only in case collide
+            errors.append(f'{what}: same name as [{seen[sec.lower()]}] (names must differ in more than the case)')
+        seen[sec.lower()] = sec
+
+        ctype = opts.get('type', '').strip().lower()
+        if ctype not in CONTROL_TYPES:
+            errors.append(f'{what}: type = "{opts.get("type", "")}" unknown, use one of: {", ".join(CONTROL_TYPES)}')
+            continue
+        known = {'type', 'label', 'bits_number', 'signed', 'default', 'options'}
+        for k in opts:
+            if k not in known:
+                cfg.warnings.append(f'{what} {k}: unknown key, ignored')
+        label = opts.get('label', sec).strip()
+        if '<' in label or '>' in label or "'" in label:
+            errors.append(f'{what}: label must not contain <, > or \'')
+
+        bmin, bmax = CONTROL_TYPES[ctype][1]
+        if ctype in ('checkbox', 'button'):
+            nbits = 1
+            if 'bits_number' in opts and opts['bits_number'].strip() != '1':
+                cfg.warnings.append(f'{what}: a {ctype} always has 1 bit, bits_number ignored')
+        else:
+            if 'bits_number' not in opts:
+                errors.append(f'{what}: bits_number is required for type {ctype}')
+                continue
+            nbits = _to_int(opts['bits_number'], f'{what} bits_number', errors)
+            if nbits is None:
+                continue
+            if not bmin <= nbits <= bmax:
+                errors.append(f'{what}: bits_number = {nbits} out of range for {ctype} ({bmin}..{bmax})')
+                continue
+
+        signed = False
+        if 'signed' in opts:
+            signed = _to_bool(opts['signed'], f'{what} signed', errors)
+            if signed and not CONTROL_TYPES[ctype][2]:
+                cfg.warnings.append(f'{what}: a {ctype} is unsigned, signed ignored')
+                signed = False
+
+        c = control(sec, ctype, label, nbits, signed)
+
+        if ctype == 'number' and nbits > 24:
+            cfg.warnings.append(f'{what}: {nbits} bits: the controller keeps values as float (24 bits of '
+                                f'mantissa), values beyond +-2^24 are not exact')
+
+        if 'default' in opts:
+            if c.ro:
+                cfg.warnings.append(f'{what}: a monitor has no default, ignored')
+            else:
+                d = _to_int(opts['default'], f'{what} default', errors)
+                if d is not None:
+                    if not c.min <= d <= c.max:
+                        errors.append(f'{what}: default = {d} out of range ({c.min}..{c.max})')
+                    else:
+                        c.default = d
+
+        if 'options' in opts:
+            if ctype != 'combo':
+                cfg.warnings.append(f'{what}: options is only for combo, ignored')
+            else:
+                items = [ y.strip() for y in opts['options'].split(',') ]
+                if len(items) > 2**nbits:
+                    errors.append(f'{what}: {len(items)} options do not fit in {nbits} bits')
+                elif any( (not y) or ('<' in y) or ('>' in y) for y in items ):
+                    errors.append(f'{what}: empty option or option with < >')
+                else:
+                    c.options = items
+
+        cfg.controls.append(c)
+
+    if errors:
+        raise ValueError('\n'.join(errors))
+    return cfg
+
+
+#%% HTML panels of the controls (docks of index.html)
+
+def html_control_panel(c):
+    """HTML of the web page element for control c (not monitors)"""
+    idd = 'dummy_' + c.name
+    if c.type == 'combo':
+        items = c.options if c.options else [ f'opt{i}' for i in range(2**c.nbits) ]
+        lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '    <div class="form-group">',
+                  f'      <label for="{idd}" class="col-xs-4 control-label">{c.label}</label>',
+                  '      <div class="col-xs-8">',
+                  f'        <select id="{idd}" class="form-control">' ]
+        for i, t in enumerate(items):
+            sel = ' selected="selected"' if i == c.default else ' '
+            lines.append(f'          <option  value="{i}"{sel}>{t}</option>')
+        lines += [ '        </select>', '      </div>', '    </div>', '  </form>', '</div>' ]
+    elif c.type == 'number':
+        lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '    <div class="form-group">',
+                  f'      <label for="{idd}" class="col-xs-4 control-label">{c.label}</label>',
+                  '      <div class="col-xs-4 col-sm-8">',
+                  f'        <input type="number" autocomplete="off" class="form-control" value="{c.default}" id="{idd}" step="1" min="{c.min}" max="{c.max}">',
+                  f'        <span style="display: none;" class="input-group-btn" id="{idd}_apply">',
+                  '          <button type="button" class="btn btn-primary btn-lg"><span class="glyphicon glyphicon-ok-circle"></span></button>',
+                  '        </span>', '      </div>', '    </div>', '  </form>', '</div>' ]
+    elif c.type == 'checkbox':
+        lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '    <div class="checkbox" style="padding-bottom: 12px;">',
+                  '      <label class="group-label">',
+                  f'        <input type="checkbox" id="{idd}"{" checked" if c.default else ""}>{c.label}',
+                  '      </label>', '    </div>', '  </form>', '</div>' ]
+    elif c.type == 'button':
+        lines = [ '<div class="panel-group col-xs-12 col-sm-12 col-md-12">',
+                  '  <form class="form-horizontal" role="form" onsubmit="return false;">',
+                  '    <div class="form-group text-center">',
+                  f'      <button id="{idd}" class="btn btn-primary btn-lg" data-checked="true" disabled>{c.label}</button>',
+                  '    </div>', '  </form>', '</div>' ]
+    else:
+        raise ValueError(f'html_control_panel: {c.type}')
+    return '\n'.join(lines)
+
+
+def html_monitor_panel(c):
+    """HTML of a monitor (read only value + bar)"""
+    idd = 'dummy_' + c.name
+    return '\n'.join([
+        '<div class="panel-group col-xs-12 col-sm-6 col-md-6">',
+        f'  <h2><label class="group-label" for="{idd}">{c.label}</label></h2>',
+        f'  <h2><span class="label label-info" style="display:block;" id="{idd}">Value</span></h2>',
+        '  <div class="progress" style="height: 5px;">',
+        f'    <div id="{idd}_bar" class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width:0%; height: 5px;" ></div>',
+        '  </div>',
+        '</div>' ])
+
+
+def update_html_dock(filename, dock, txt):
+    """Replace the lines between <!-- dock --> and <!-- dock END --> with txt, indented as the marker"""
+    with open(filename, encoding='utf-8') as fd:
+        lines = fd.read().split('\n')
+    start = [ i for i, l in enumerate(lines) if l.strip() == f'<!-- {dock} -->' ]
+    end   = [ i for i, l in enumerate(lines) if l.strip() == f'<!-- {dock} END -->' ]
+    if len(start) != 1 or len(end) != 1 or end[0] < start[0]:
+        raise ValueError(f'{filename}: markers <!-- {dock} --> / <!-- {dock} END --> not found once each')
+    indent = lines[start[0]].find('<!--')
+    new = [ (' '*indent + l) if l else '' for l in txt.split('\n') ] if txt else []
+    lines = lines[:start[0]+1] + new + lines[end[0]:]
+    with open(filename, 'w', encoding='utf-8') as fd:
+        fd.write('\n'.join(lines))
+
+
+def update_c_define(filename, name, value):
+    """Set the value of '#define name value' in a C header"""
+    with open(filename, encoding='utf-8') as fd:
+        txt = fd.read()
+    new, n = re.subn(rf'^(#define\s+{name}\s+)\S+', rf'\g<1>{value}', txt, flags=re.M)
+    if n != 1:
+        raise ValueError(f'{filename}: #define {name} not found')
+    with open(filename, 'w', encoding='utf-8') as fd:
+        fd.write(new)
+
+
+def added_regs_doc(f, controls, indent=1):
+    """Comment block of dummy.v that lists the registers of the controls (ADDED REGS dock)"""
+    txt = txt_buff(n=indent)
+    for c in controls:
+        r = f[c.name]
+        rng = f'({c.min:>11d} --> {c.max:<11d})'
+        kind = 'read only (wire, drive it)' if c.ro else 'reg written by the web page'
+        txt.add(f'//   {c.name:<15s} {r.addr} {c.nbits:2d} bits {"  " if c.signed else "un"}signed {rng} {kind}')
+    return txt.out()
 
 
 if __name__ == '__main__':
