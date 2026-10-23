@@ -8,8 +8,7 @@ of community applications for Red Pitaya Project.
 # Begin a new project
 
 Describe the controls of the App in an `.ini` file (see `config.ini`: combo boxes, numbers, checkboxes,
-buttons and read-only monitors) and run `new_project.py` (Python >= 3.8, standard library only;
-ImageMagick is optional, for the icon labels):
+buttons and read-only monitors) and run `new_project.py` (Python >= 3.8, standard library only):
 
 ```
 ./new_project.py -n -c my.ini my_app          # check my.ini and print the register map (writes nothing)
@@ -23,6 +22,13 @@ and an element of the web page, already connected. The `.ini` is validated befor
 standalone project folder (root `Makefile`, `settings.sh`, `_settings.env`, `resources/`) and keeps a copy
 of the `.ini` as `<App>/app.ini`: after editing it, `<App>/config_tool.py -a` regenerates the automatic
 parts of the sources.
+
+**Logo / icon:** `resources/logo.svg` is a generic logo; `new_project.py` writes the App name in its element
+`id="AppName"` (the text `APP NAME LONG`) and renders it as a 100x100 PNG into `resources/logo.png` and
+`<App>/info/icon.png`, with the first tool found: the Python module `cairosvg`, `rsvg-convert` or `inkscape`
+(`--icon-tool` chooses one). Without any of them it warns (install one with `pip install cairosvg`,
+`sudo apt install librsvg2-bin` or `sudo apt install inkscape`) and the App uses the generic `resources/logo.png`;
+`<App>/config_tool.py -l` renders it again later. `--no-icon` skips the rendering.
 
 Register map of the dummy module (`0x40600000`), `[general] register_map`:
 `fixed` (default) template registers at `0x000-0x0FC` and the controls from `0x100`; `legacy` the layout of
@@ -61,13 +67,34 @@ If you want to instantiate new modules, just paste them or create them in folder
 
 fpga/prj/v0.94/rtl/dummy/
 
-And after that, run:
+Instantiate them in dummy.v and run:
 
 ```
 ./config_tool.py -a
 ```
 
-After that you can use the added module inside the dummy.v file for your project.
+### What `config_tool.py` does (`-a` = all of it)
+
+- **Registers** (`-v -m -w -p`): from `app.ini`, the registers in `dummy.v`, the C controller, the web page and
+  `py/hugo.py` (the code written outside the `DOCK` markers is kept).
+- **Modules in the tcl scripts** (`-t`): the files of `fpga/prj/v0.94/rtl/dummy/` that define the modules
+  instantiated in `dummy.v` (and, recursively, in those modules) are listed in the Vivado scripts of `fpga/` (2020.1)
+  and `fpga_eco1/` (2015.2); the other files are not read. It warns about modules found nowhere (the synthesis would
+  fail) and about module names that clash with the RedPitaya design (e.g. `debounce`).
+- **Combo boxes** (`-w`): the options of `app.ini` (`options = a, b, c`); otherwise, if the register is the `.sel` of a
+  muxer of `dummy.v`, one option per muxer input, named by `[names]` of `app.ini` (`wire = text`), or the label of the
+  control with that name, or the wire name; otherwise the numbers. The template selects (Osc A/B, Out1/2...) follow the
+  same rule.
+- **`c/names_dic.txt`** (`-n`): every value of every combo box with its text (`register address value text`), for
+  scripts and the tools of the board.
+- **Changes of `app.ini`**: before writing, the registers of the last generation (the `ADDED REGS` block of `dummy.v`)
+  are compared with `app.ini`: controls added, removed, changed (width, sign, kind) and moved to another address
+  (the controls take consecutive addresses from `0x100`: removing one moves the next ones, scripts that use fixed
+  addresses must change). A removed register that the user code still uses (`dummy.v`, own code in `index.html`,
+  `src/`, `py/`) is reported with its file and line until that code is fixed. For a control renamed in `app.ini`,
+  `./config_tool.py -a --rename OLD:NEW` renames it also in that code (the tool suggests it when one control
+  disappears and another one of the same width and kind appears).
+- **Logo** (`-l`, not part of `-a`): App name on `../resources/logo.svg` -> `logo.png` and `info/icon.png`.
 
 ## Compile all
 
@@ -106,6 +133,13 @@ cd ~/rp/rp_NAME
 source settings.sh
 LANG=C make
 ```
+
+## Scope of the web page
+
+Mouse wheel over the plot: no key = zoom of both axes centred on the mouse; SHIFT = time axis only (cursor ↔);
+ALT = Y axis only (cursor ↕; some Linux window managers take ALT + wheel for themselves). Picking an Ext Trig other
+than None sets the trigger to Source = External and Mode = Normal. **Reset zoom**: X = one whole memory of the scope at
+the current decimation from t = 0, Y = -1..1 V (raw mode -8192..8192).
 
 ## Ecosystem 2.0
 

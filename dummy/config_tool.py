@@ -10,12 +10,25 @@ control of app.ini. From them this script writes:
   -m  src/*.c, src/*.h         C controller: register struct, parameters table, FPGA <-> parameters copy
   -w  index.html               panels of the controls and monitors, JS lists of controls, LOADPARAMS
   -p  py/hugo.py               register list for remote access from Python
-  -t  fpga_eco1/*.tcl          Verilog sources of fpga/prj/v0.94/rtl/dummy/ for the Vivado 2015.2 design
-                               (the Vivado 2020.1 design of fpga/ takes every file of that folder)
-  -a  all of them
+  -t  fpga/*.tcl, fpga_eco1/*.tcl   files of fpga/prj/v0.94/rtl/dummy/ with the modules instantiated in dummy.v
+                               (recursively) for the Vivado 2020.1 and 2015.2 designs; reports unused files and
+                               modules that are found nowhere
+  -n  c/names_dic.txt            texts of the values of every combo box (register, address, value, text)
+  -a  all of them (-v -m -w -p -t -n)
+  -l  ../resources/logo.svg, logo.png and info/icon.png: App name on the logo, rendered to 100x100 PNG
+      (cairosvg, rsvg-convert or inkscape; not part of -a)
 
-Run it again after editing app.ini (new controls, labels, widths...) or after adding .v files to
+Run it again after editing app.ini (new controls, labels, widths...) or after instantiating in dummy.v a module of
 fpga/prj/v0.94/rtl/dummy/. The user logic in dummy.v (outside the docks) is not touched.
+
+Changes of app.ini: before writing, the registers of the last generation (ADDED REGS block of dummy.v) are compared
+with app.ini and the controls added, removed, changed or moved to another address are listed. After writing, the
+removed registers still used in the user code (dummy.v, index.html, src/, py/) are reported with their line: fix
+them, or rename them with --rename OLD:NEW (when a control was renamed in app.ini).
+
+Combo boxes: the options of app.ini; otherwise, if the register is the .sel of a muxer of dummy.v, the names of the
+muxer inputs (text from app.ini [names], or the label of the control with that name, or the wire name); otherwise
+the numbers. The template selects (oscA_sw, out1_sw...) take the names of their muxer inputs the same way.
 
 Register map (app.ini [general] register_map):
   fixed  (default) template registers at 0x000-0x0FC, controls of app.ini from 0x100 in order
@@ -25,6 +38,7 @@ Register map (app.ini [general] register_map):
 import os
 import sys
 import argparse
+import re
 from glob import glob
 
 from config_lib import *
@@ -55,16 +69,26 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--do-python" , dest='do_py'     , action="store_true",
                         help="configure python scripts (py/hugo.py)")
     parser.add_argument("-t", "--do-tcl"    , dest='do_tcl'    , action="store_true",
-                        help="configure TCL files of fpga_eco1/ (Verilog sources of fpga/prj/v0.94/rtl/dummy/)")
+                        help="configure TCL files of fpga/ and fpga_eco1/ (the files of fpga/prj/v0.94/rtl/dummy/ "
+                             "with the modules instantiated in dummy.v)")
+    parser.add_argument("-n", "--names"     , dest='do_names'  , action="store_true",
+                        help="write c/names_dic.txt (texts of the values of the combo boxes)")
     parser.add_argument("-a", "--all"       , dest='do_all'    , action="store_true",
-                        help="configure all the files")
+                        help="configure all the files (-v -m -w -p -t -n)")
+    parser.add_argument("--rename"          , dest='rename'    , action="append", default=[], metavar='OLD:NEW',
+                        help="a control was renamed in app.ini from OLD to NEW: rename it also in the user code "
+                             "(dummy.v, index.html, src/) before regenerating (repeatable)")
+    parser.add_argument("-l", "--logo"      , dest='do_logo'   , action="store_true",
+                        help="write the App name on ../resources/logo.svg and render logo.png and info/icon.png "
+                             "(not part of -a)")
 
     args = parser.parse_args()
 
     if args.do_all:
-        args.do_verilog = args.do_main = args.do_html = args.do_py = args.do_tcl = True
+        args.do_verilog = args.do_main = args.do_html = args.do_py = args.do_tcl = args.do_names = True
 
-    if not ( args.do_verilog or args.do_main or args.do_html or args.do_py or args.do_tcl ):
+    if not ( args.do_verilog or args.do_main or args.do_html or args.do_py or args.do_tcl or args.do_logo or
+             args.do_names or args.rename ):
         print('nothing to do')
         parser.print_help()
         sys.exit(0)
@@ -80,6 +104,32 @@ except ValueError as e:
 for w in cfg.warnings:
     print('WARNING app.ini: ' + w)
 print('Register map  : '+cfg.register_map)
+
+
+def do_logo():
+    """-l: App name on ../resources/logo.svg, rendered to ../resources/logo.png and info/icon.png"""
+    print('do_logo')
+    res = os.path.join('..', 'resources')
+    if not os.path.isfile(os.path.join(res, 'logo.svg')):
+        print(f'WARNING: {res}/logo.svg not found: logo not made')
+    else:
+        used, warns = make_logo(os.path.join(res, 'logo.svg'), os.path.join(res, 'logo.svg'),
+                                os.path.join(res, 'logo.png'), cfg.app_name or AppName,
+                                icon_out=os.path.join('info', 'icon.png'))
+        for w in warns:
+            print('WARNING: ' + w)
+        if used:
+            print(f'{res}/logo.svg, logo.png and info/icon.png written (rendered with {used})')
+        else:
+            print(f'{res}/logo.svg written; info/icon.png = {res}/logo.png (not rendered)')
+    print('\n')
+
+
+# -l alone: only the logo (no analysis of the registers and controls)
+if __name__ == '__main__' and args.do_logo and not ( args.do_verilog or args.do_main or args.do_html or args.do_py or
+                                                     args.do_tcl or args.do_names or args.rename ):
+    do_logo()
+    sys.exit(0)
 print('\n')
 
 
@@ -143,6 +193,47 @@ for r in f:
 
 for i in ['osc_ctrl','in1','in2','out1','out2']:
     f[i].write_def=False
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Changes of app.ini since the last generation (ADDED REGS block of dummy.v)
+
+prev_regs = read_added_regs(DUMMY_V)
+changes = ini_changes(prev_regs, cfg, f)
+renames = []
+if __name__ == '__main__':
+    for rn in args.rename:
+        old, sep, new = rn.partition(':')
+        if not sep or not REG_NAME_RE.match(old) or not REG_NAME_RE.match(new):
+            print(f'ERROR: --rename {rn}: use --rename OLD:NEW', file=sys.stderr)
+            sys.exit(2)
+        if new not in [ c.name for c in cfg.controls ]:
+            print(f'ERROR: --rename {rn}: app.ini has no control [{new}] (rename the section in app.ini first)', file=sys.stderr)
+            sys.exit(2)
+        if old in [ c.name for c in cfg.controls ]:
+            print(f'ERROR: --rename {rn}: app.ini still has a control [{old}]', file=sys.stderr)
+            sys.exit(2)
+        renames.append((old, new))
+    if prev_regs:
+        if any(changes[k] for k in changes if k != 'pending'):
+            print('Changes of app.ini since the last generation (ADDED REGS of dummy.v):')
+        for n in changes['added']:
+            print(f'    added    : {n}')
+        for n in changes['removed']:
+            print(f'    removed  : {n}' + ('' if n in [ o for o, _ in renames ] else
+                  '   WARNING: its register and wire disappear from dummy.v, the C controller and the web page'))
+        for t in changes['changed']:
+            print(f'    changed  : {t}')
+        for n, a, b in changes['moved']:
+            print(f'    address  : {n} 0x{a:03X} -> 0x{b:03X}   WARNING: scripts that use the old address must change')
+        for o, n in changes['renames']:
+            if (o, n) not in renames:
+                print(f'    renamed? : {o} -> {n} (same width and kind): if so, run again with --rename {o}:{n} so that '
+                      f'the user code is renamed too')
+        print('\n')
+    for old, new in renames:
+        for fn, k in rename_in_sources(old, new):
+            print(f'--rename {old}:{new}: {k} replacement(s) in {fn}')
 
 
 
@@ -249,7 +340,23 @@ for r in h:
     print('    '+r.name.ljust(25)+' is of type '+r.type)
 
 
-h.auto_set_controls(DUMMY_V,'dummy')
+# texts of the muxer inputs in the combo boxes: app.ini [names], else the label of the control with that name
+mux_names = { c.name: c.label for c in cfg.controls }
+mux_names.update(cfg.names)
+# the combos of app.ini are configured below (options / muxer / numbers): no "set by hand" message for them
+OUT_SW_RE = r'^dummy_(out\d|slow_out\d)_sw$'
+h.auto_set_controls(DUMMY_V, 'dummy', mux_names, quiet=[ 'dummy_'+c.name for c in cfg.controls ] +
+                                                       [ r.name for r in h if re.match(OUT_SW_RE, r.name) ])
+
+# Output selects of the template whose muxer is not in dummy.v (e.g. slow_out1/2, disabled in the template: those
+# outputs are fixed at 0): one option that says so, instead of the texts of another App. When the muxer is written
+# in dummy.v, config_tool.py takes its inputs.
+no_mux_outputs = []
+for r in h:
+    if r.type == 'select' and r.control is None and re.match(OUT_SW_RE, r.name):
+        r.control = select(idd=r.name, items=['0 (no muxer in dummy.v)'], vals=[0], default=0)
+        no_mux_outputs.append(r.name[len('dummy_'):])
+        print(r.name + ': no muxer in dummy.v (output fixed): one option "0 (no muxer in dummy.v)"')
 
 
 h['dummy_osc1_filt_off'   ].control.text='Ch1'
@@ -257,15 +364,17 @@ h['dummy_osc2_filt_off'   ].control.text='Ch2'
 h['dummy_osc_raw_mode'    ].control.text = 'Raw&nbsp;Mode'
 h['dummy_osc_lockin_mode' ].control.text = 'R|Phase&nbsp;Mode'
 
-h['dummy_oscA_sw'].control.enable = [True]*30 + [False]*2
-h['dummy_oscB_sw'].control.enable = [True]*30 + [False]*2
+# the 32 inputs of the scope muxers (in0..in31) are all usable: none is reserved
 
 # Controls of app.ini
 for c in cfg.controls:
     hr = h['dummy_'+c.name]
     if c.htype == 'select':
-        items = list(c.options) if c.options else [ str(y) for y in range(2**c.nbits) ]
+        # options of app.ini; else the inputs of a muxer selected by this combo in dummy.v; else the numbers
+        mux = get_muxer(DUMMY_V, c.name, mux_names)[:2**c.nbits]
+        items = list(c.options) if c.options else (mux if mux else [ str(y) for y in range(2**c.nbits) ])
         hr.control = select(idd='dummy_'+c.name, items=items, vals=list(range(len(items))), default=c.default)
+        c.combo_source = 'options of app.ini' if c.options else ('inputs of its muxer in dummy.v' if mux else 'numbers')
     elif c.htype in ('button', 'checkbox'):
         hr.control.text = c.label
 
@@ -322,25 +431,77 @@ if __name__ == '__main__' and args.do_py:
 
 if __name__ == '__main__' and args.do_tcl:
     print('do_tcl')
+    # Files of fpga/prj/v0.94/rtl/dummy/ with the modules instantiated in dummy.v (recursively)
+    mods = dummy_module_files(DUMMY_V)
+    print('Modules instantiated in dummy.v (and in them): ' +
+          (', '.join(f'{m} ({fn})' for m, fn in mods['modules'].items()) or 'none'))
+    if mods['base']:
+        print('Modules of the RedPitaya design used by dummy.v: ' + ', '.join(mods['base']))
+    print('Files of dummy/ not used (not added): ' + (', '.join(mods['unused']) or 'none'))
+    for w in mods['warnings']:
+        print('WARNING: ' + w)
 
     tag = ( '# Automatically added dummy modules', '# End of automatic part')
+    # fpga/ (Vivado 2020.1): path relative to fpga/prj/v0.94/ ($path_rtl_prj)
+    txt0 = ''.join('add_files  -fileset sources_1 $path_rtl_prj/dummy/' + y + '\n' for y in mods['files'])
+    print('Writting file: fpga/red_pitaya_vivado_Z10.tcl')
+    update_file_match(filename='fpga/red_pitaya_vivado_Z10.tcl', tag=tag, txt=txt0.rstrip('\n'), blank=False)
+    # fpga_eco1/ (Vivado 2015.2, non-project and project scripts): path relative to fpga_eco1/ ($path_dummy)
     txt1 = '\n'
     txt2 = '\n'
-    # fpga_eco1/ (Vivado 2015.2, non-project): one line per file; path relative to fpga_eco1/ ($path_dummy)
-    for vfile in [ '$path_dummy/dummy/'+os.path.basename(y) for y in sorted(glob(os.path.join(DUMMY_RTL_DIR,'dummy','*.v'))) ]:
+    for vfile in [ '$path_dummy/dummy/'+y for y in mods['files'] ]:
         txt1 += 'read_verilog'.ljust(34) + vfile + '\n'
         txt2 += 'add_files'.ljust(34) + vfile + '\n'
-    print('Writting file: fpga_eco1/red_pitaya_vivado.tcl')
-    update_file_match(
-        filename='fpga_eco1/red_pitaya_vivado.tcl',
-        tag=tag,
-        txt=txt1)
-    print('Writting file: fpga_eco1/red_pitaya_vivado_project.tcl')
-    update_file_match(
-        filename='fpga_eco1/red_pitaya_vivado_project.tcl',
-        tag=tag,
-        txt=txt2)
+    for fn, txt in (('fpga_eco1/red_pitaya_vivado.tcl', txt1), ('fpga_eco1/red_pitaya_vivado_project.tcl', txt2)):
+        if os.path.isfile(fn):
+            print('Writting file: ' + fn)
+            update_file_match(filename=fn, tag=tag, txt=txt)
     print('\n')
+
+
+if __name__ == '__main__' and args.do_names:
+    print('do_names')
+    entries = []
+    ini_combos = { c.name: c for c in cfg.controls if c.htype == 'select' }
+    for r in h:
+        if r.type != 'select' or not r.name.startswith('dummy_'):
+            continue
+        reg = r.name[len('dummy_'):]
+        if reg not in f.names:
+            continue
+        ctl = r.control
+        if reg in no_mux_outputs:
+            continue                  # no muxer in dummy.v: the output is fixed, its select has no meaning
+        if isinstance(ctl, select):
+            items = [ (v, t) for v, t, e in zip(ctl.vals, ctl.items, ctl.enable) if e ]
+            src = getattr(ini_combos.get(reg), 'combo_source', None) or 'inputs of its muxer in dummy.v'
+        else:
+            items = html_select_options('index.html', r.name)
+            src = 'options written in index.html'
+        if not items:
+            continue                  # no <select> in the page (e.g. read_ctrl, a bit mask)
+        entries.append((reg, 4*f[reg].index, src, items))
+    print('Writting file: c/names_dic.txt (' + ', '.join(e[0] for e in entries) + ')')
+    write_names_dic(os.path.join('c', 'names_dic.txt'), cfg.app_name or AppName, entries)
+    print('\n')
+
+
+if __name__ == '__main__' and args.do_logo:
+    do_logo()
+
+
+if __name__ == '__main__' and (args.do_verilog or args.do_main or args.do_html or args.do_py) and prev_regs:
+    # removed registers still used outside the generated parts (also those of earlier runs not fixed yet)
+    gone = [ n for n in changes['removed'] + changes['pending'] if n not in [ o for o, _ in renames ] ]
+    refs = stale_references(gone, DUMMY_V)
+    for fn, i, l in refs:
+        print(f'WARNING: {fn}:{i}: uses a register removed from app.ini: {l}')
+    if refs:
+        print('         (remove or change that code; if the control was renamed, use --rename OLD:NEW)\n')
+    # remembered in the ADDED REGS block of dummy.v, so the next runs keep reporting them until they are fixed
+    still = [ n for n in gone if any(re.search(rf'\b(dummy_|DUMMY_|->\s*)?{re.escape(n)}\b', l, flags=re.I) for _, _, l in refs) ]
+    if args.do_verilog and (still or changes['pending']):
+        update_verilog(DUMMY_V, dock=['ADDED REGS'], txt=[added_regs_doc(f, cfg.controls, removed=still)+'\n'])
 
 
 if __name__ == '__main__':

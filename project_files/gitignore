@@ -3,11 +3,7 @@ _settings.env
 _build_number
 archive/
 @APP@/target/
-@APP@/target_dbg/
-@APP@/target_rld/
 @APP@/src/obj/
-@APP@/src/obj_dbg/
-@APP@/src/obj_rld/
 @APP@/fpga_eco1/out/
 @APP@/fpga_eco1/sdk/
 @APP@/fpga_eco1/project/

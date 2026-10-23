@@ -64,28 +64,11 @@ add_files                         $path_dummy/dummy.v
 
 # Automatically added dummy modules
 
-add_files                         $path_dummy/dummy/UniversalCounter.v
 add_files                         $path_dummy/dummy/aDACdecoder.v
-add_files                         $path_dummy/dummy/dummy_debounce.v
-add_files                         $path_dummy/dummy/filtro_pasaaltos.v
-add_files                         $path_dummy/dummy/filtro_pasabajos.v
-add_files                         $path_dummy/dummy/fun_icdf.v
-add_files                         $path_dummy/dummy/fun_pico.v
-add_files                         $path_dummy/dummy/gen_mod.v
-add_files                         $path_dummy/dummy/gen_ramp.v
-add_files                         $path_dummy/dummy/mult_dsp_14.v
-add_files                         $path_dummy/dummy/muxer3.v
 add_files                         $path_dummy/dummy/muxer4.v
-add_files                         $path_dummy/dummy/muxer5.v
-add_files                         $path_dummy/dummy/muxer_reg3.v
 add_files                         $path_dummy/dummy/muxer_reg4.v
 add_files                         $path_dummy/dummy/muxer_reg5.v
 add_files                         $path_dummy/dummy/pipe_mult.v
-add_files                         $path_dummy/dummy/rand_gen_uni.v
-add_files                         $path_dummy/dummy/satprotect.v
-add_files                         $path_dummy/dummy/signo.v
-add_files                         $path_dummy/dummy/sum_2N.v
-add_files                         $path_dummy/dummy/trigger_input.v
 
 
 # End of automatic part

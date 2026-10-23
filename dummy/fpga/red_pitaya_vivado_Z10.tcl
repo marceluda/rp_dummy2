@@ -6,7 +6,7 @@
 #
 # Red Pitaya App generated with rp_dummy2: copied from RedPitaya-FPGA Release_2026.1 (red_pitaya_vivado_Z10.tcl),
 # through the lock-in Apps (rp_lock-in_pid_h), with the sources of the dummy module (prj/v0.94/rtl/dummy.v and
-# every file of prj/v0.94/rtl/dummy/, + .dat ROM files) added and without write_hw_platform.
+# the files of prj/v0.94/rtl/dummy/ that it needs, + .dat ROM files) added and without write_hw_platform.
 # Normally called from the Makefile (make / make project), not by hand.
 ################################################################################
 
@@ -121,8 +121,16 @@ if {$prj_name != "pyrpl"} {
 }
 
 add_files  -fileset sources_1 -norecurse $path_rtl_prj
-# dummy module: dummy.v is in $path_rtl_prj (added above); its modules and ROM data files in dummy/
-add_files  -fileset sources_1 $path_rtl_prj/dummy
+# dummy module: dummy.v is in $path_rtl_prj (added above). Its modules: the files of dummy/ with the modules
+# instantiated in dummy.v (and in them), listed by config_tool.py -t (or -a). Files added by hand go outside the
+# automatic part. The ROM data files (.dat) of dummy/ are all added.
+# Automatically added dummy modules
+add_files  -fileset sources_1 $path_rtl_prj/dummy/aDACdecoder.v
+add_files  -fileset sources_1 $path_rtl_prj/dummy/muxer4.v
+add_files  -fileset sources_1 $path_rtl_prj/dummy/muxer_reg4.v
+add_files  -fileset sources_1 $path_rtl_prj/dummy/muxer_reg5.v
+add_files  -fileset sources_1 $path_rtl_prj/dummy/pipe_mult.v
+# End of automatic part
 set dummy_dat_files [glob -nocomplain $path_rtl_prj/dummy/*.dat]
 if {$dummy_dat_files != ""} {
 add_files  -fileset sources_1 $dummy_dat_files

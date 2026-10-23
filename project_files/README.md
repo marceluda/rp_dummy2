@@ -20,11 +20,18 @@ bootgen, `fpga.bit.bin` (Ecosystem 2.0, loaded by `fpga.sh`). For Ecosystem 0.9x
 
 - `@APP@/fpga/prj/v0.94/rtl/dummy.v`: your logic. The registers of the controls are already declared and connected to
   the web page (see the `ADDED REGS` list near the top). Monitors are `wire`s: assign them a value.
-- `@APP@/fpga/prj/v0.94/rtl/dummy/`: put new Verilog modules here (the 2020.1 design takes every file of the
-  folder; run `@APP@/config_tool.py -t` to update the source list of `fpga_eco1/`). Module names must not
-  clash with the RedPitaya modules of `fpga/rtl/rtl/` (e.g. `debounce`).
+- `@APP@/fpga/prj/v0.94/rtl/dummy/`: put new Verilog modules here. After instantiating one in `dummy.v`, run
+  `@APP@/config_tool.py -a` (or `-t`): the files of the modules used by `dummy.v` are listed in the tcl scripts of
+  `fpga/` and `fpga_eco1/` (missing modules and names that clash with the RedPitaya design, e.g. `debounce`, are
+  reported).
 - `@APP@/app.ini`: the controls. After editing it, run `@APP@/config_tool.py -a` to regenerate the
-  automatic parts of the sources (the code you wrote outside the `DOCK` markers is kept).
+  automatic parts of the sources (the code you wrote outside the `DOCK` markers is kept). It lists what changed
+  (controls added / removed / moved to another address) and the lines of your code that still use a removed
+  register; for a renamed control use `@APP@/config_tool.py -a --rename OLD:NEW`.
+- Combo boxes: `options = a, b` in `app.ini`, or the inputs of the muxer that the combo selects in `dummy.v` (texts in
+  `[names]` of `app.ini`). `@APP@/c/names_dic.txt` lists the text of every combo value.
+- Logo: `resources/logo.svg` with the App name, rendered to `resources/logo.png` and `@APP@/info/icon.png`
+  (`@APP@/config_tool.py -l` renders it again; needs `cairosvg`, `rsvg-convert` or `inkscape`).
 
 ## Upload
 

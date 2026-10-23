@@ -105,7 +105,7 @@ else
 
     ssh ${RPOPTS} "${RPIP}" "${RP_RW} ; rm -rf ${APP_DIR} ; mkdir -p ${APP_DIR}"
     # Ecosystem 2.0: fpga.sh + fpga.bit.bin (+ nginx.conf). 0.9x/1.0: fpga.conf + red_pitaya.bit.
-    # The _RELOAD package has neither fpga.sh nor bitstreams (it keeps the FPGA loaded): only what exists is sent.
+    # Optional files: only those in the package are sent.
     FILES="controllerhf.so css js nginx.conf fpga.conf index.html info py"
     for f in fpga.sh fpga.bit.bin red_pitaya.bit c ; do
         if [ -e "$f" ]; then FILES="$FILES $f"; fi

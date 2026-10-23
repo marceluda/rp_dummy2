@@ -30,6 +30,11 @@
 
   <link rel="stylesheet" href="css/bootstrap.css" type="text/css">
   <link rel="stylesheet" href="css/style.css"     type="text/css">
+  <style>
+    /* cursor of the scope while SHIFT (wheel: X only) or ALT (wheel: Y only) is down, see [PLOT WHEEL] */
+    #plot_holder.wheel-zoom-x, #plot_holder.wheel-zoom-x * { cursor: ew-resize !important; }
+    #plot_holder.wheel-zoom-y, #plot_holder.wheel-zoom-y * { cursor: ns-resize !important; }
+  </style>
 
   <!--  ERASE ON NEXT COMMIT
   For Cookies https://github.com/js-cookie/js-cookie/releases/tag/v2.1.4 >
@@ -95,7 +100,9 @@
     colors: ['#3276B1', '#D2322D', '#009900'],    // channel1, channel2, trigger line
     lines: { lineWidth: 1 },
     selection: { mode: 'xy' },
-    zoom: { interactive: true, trigger: null },
+    // interactive false: the mouse wheel over the plot is handled by plotWheelEvent() (see [PLOT WHEEL]);
+    // plot.zoom()/zoomOut() of jquery.flot.navigate are still used by the zoom-out tool
+    zoom: { interactive: false, trigger: null },
     xaxis: { min: xmin, max: xmax },
     grid: { borderWidth: 0 , hoverable: true, clickable: true },
     legend: { noColumns: 2, margin: [0, 0], backgroundColor: 'transparent' },
@@ -160,10 +167,8 @@
   // Never kept: read-only values, and keys that loadParams()/updateTimeUnits()/sendParams() handle by themselves
   var unsent_skip_keys = display_keep_keys.concat(['single_btn', 'xmin', 'xmax', 'time_units', 'forcex_flag',
                                                    'min_y', 'max_y']);
-  // localStorage key of the saved configs. This App already had its own key (not shared with the lock-in Apps):
-  // kept as it was, so the configs saved with older versions are still listed. Literal (not app_id), so the
-  // _DEBUG/_RELOAD variants share it, as before.
-  // Key of the saved configs in localStorage: specific to this App (new_project.py sets it to '<App>config')
+  // Key of the saved configs in localStorage: specific to this App (new_project.py sets it to '<App>config'; not
+  // shared with the lock-in Apps)
   var config_storage_key = 'dummyconfig';
   var last_state_save = 0;
   var last_get_failed = false;
@@ -2784,8 +2789,7 @@
         })
       );
 
-      params.local.xmin = parseFloat(ranges.xaxis.from.toFixed(xdecimal_places));
-      params.local.xmax = parseFloat(ranges.xaxis.to.toFixed(xdecimal_places));
+      xWindowToParams(ranges.xaxis.from, ranges.xaxis.to);   // no toFixed(2), see xWindowToParams()
 
       updateTriggerSlider();
       sendParams(true);
@@ -2803,15 +2807,178 @@
         zoompan_timer = null;
 
         var xaxis = plot.getAxes().xaxis;
-        params.local.xmin = parseFloat(xaxis.min.toFixed(xdecimal_places));
-        params.local.xmax = parseFloat(xaxis.max.toFixed(xdecimal_places));
+        xWindowToParams(xaxis.min, xaxis.max);   // no toFixed(2), see xWindowToParams()
 
         updateTriggerSlider();
         sendParams(true);
 
       }, 250);
     });
+
+    plotWheelBind();  // mouse wheel over the plot (see [PLOT WHEEL])
   }
+
+  // [PLOT WHEEL BEGIN] Mouse wheel over the scope plot (port of lock_in+pid_harmonic v2.3.22 / lock_in+pid v2.2.9;
+  // also run by tests/plot_wheel_sim.js):
+  //   - no key: zoom of both axes (X and Y), centred on the mouse position;
+  //   - SHIFT: X only, the cursor is a horizontal double arrow (ew-resize) while SHIFT is down over the plot;
+  //   - ALT: Y only, the cursor is a vertical double arrow (ns-resize). SHIFT + ALT: both axes.
+  // It replaces the wheel handler of jquery.flot.navigate (zoom.interactive: false in plot_options), which zoomed
+  // both axes whatever the keys. One wheel step zooms by plot_wheel_amount (1.5, as navigate did).
+  // X: the window goes to the server as before (event 'plotzoom' -> zoompan_timer, 250 ms debounce -> one
+  // sendParams(true), which picks the Dec and answers with forceX if the units change); it stays between 20 ns and
+  // one memory at the largest Dec (68.72 s), the limits of the X-/X+ buttons. Y is only local (no POST); it stays
+  // between 1/2048 and 1000 times the full scale (2 V, raw mode 16384 counts).
+  // SHIFT + wheel arrives as deltaX in Chrome (Linux/Windows) and in some Firefox versions: both are handled
+  // (jquery.mousewheel gives deltaY = -orig.deltaY but deltaX = +orig.deltaX, as in ScrollIncrement()).
+  // The wheel over the number fields (ScrollIncrement(): SHIFT x10, CTRL x100) is not affected: only #plot_holder.
+  // Some window managers on Linux take ALT + wheel for themselves: then the Y-only zoom can not work there.
+  var plot_wheel_amount = 1.5;
+  var plot_wheel_xlim = [20e-9, 16384 * 524288 * 8e-9];   // X window, seconds
+  var plot_wheel = { over: false, shift: false, alt: false, bound: false };
+
+  // Time units of the plot (params.local.time_units: 0 us, 1 ms, 2 s) per second
+  function timeUnitFactor(tu) {
+    return Math.pow(10, 3 * (2 - tu));
+  }
+
+  // X window of the plot (current time units) into params.local.xmin/xmax for the server. It used to be rounded with
+  // toFixed(xdecimal_places = 2) in the current units: a window under 0.01 units (e.g. -0.50..0.98 ms while the units
+  // were still s, after a quick zoom-in burst) was sent as xmin = xmax = 0 and the server answered 0..1 us. Now 12
+  // significant digits (only to drop float noise such as 0.30000000000000004), and never xmax <= xmin.
+  function xWindowToParams(min, max) {
+    min = Number(min); max = Number(max);
+    var a = parseFloat(min.toPrecision(12)), b = parseFloat(max.toPrecision(12));
+    if(!(b > a)) { a = min; b = max; }
+    if(!(b > a)) b = a + Math.max(Math.abs(a) * 1e-9, 1e-12);
+    params.local.xmin = a;
+    params.local.xmax = b;
+  }
+
+  // 'x' (SHIFT), 'y' (ALT) or 'xy' (no key, or both)
+  function plotWheelMode(shift, alt) {
+    if(shift && !alt) return 'x';
+    if(alt && !shift) return 'y';
+    return 'xy';
+  }
+
+  // [min, max] of an axis zoomed by 'amount' (> 1 in, < 1 out) around the value v0 (kept where it is on the screen),
+  // with the range kept in [lo, hi]. A range already out of [lo, hi] can only come back towards it. null: no change.
+  function wheelZoomRange(min, max, v0, amount, lo, hi) {
+    min = Number(min); max = Number(max);
+    var range = max - min;
+    if(!(range > 0) || !isFinite(range) || !(amount > 0) || !isFinite(v0)) return null;
+    v0 = Math.min(Math.max(v0, min), max);          // mouse over the axis labels: the nearest edge
+    var nr = range / amount;
+    if(amount < 1 && hi > 0) nr = Math.min(nr, Math.max(hi, range));
+    if(amount > 1 && lo > 0) nr = Math.max(nr, Math.min(lo, range));
+    if(!(nr > 0) || nr === range) return null;
+    var a = range / nr;
+    return { min: v0 - (v0 - min) / a, max: v0 + (max - v0) / a };
+  }
+
+  // Y range limits in the units of the Y axis (V, or counts in raw mode)
+  function plotWheelYLimits() {
+    var raw = !!(params.local && Number(params.local.dummy_osc_raw_mode));
+    var full = (raw ? 16384 : 2);
+    return [full / 2048, full * 1000];
+  }
+
+  // Zooms the plot around the pixel (cx, cy) of the plot area; returns which axes changed
+  function plotWheelZoom(mode, cx, cy, zoom_in) {
+    var res = { x: false, y: false };
+    if(!plot) return res;
+    var axes = plot.getAxes(), o = plot.getOptions();
+    var amount = (zoom_in ? plot_wheel_amount : 1 / plot_wheel_amount);
+    if(mode !== 'y') {
+      var tu = Number(params.local.time_units), f = timeUnitFactor(isFinite(tu) ? tu : 0);
+      var xr = wheelZoomRange(axes.xaxis.min, axes.xaxis.max, axes.xaxis.c2p(cx), amount,
+                              plot_wheel_xlim[0] * f, plot_wheel_xlim[1] * f);
+      if(xr) { o.xaxes[0].min = xr.min; o.xaxes[0].max = xr.max; res.x = true; }
+    }
+    if(mode !== 'x') {
+      var yl = plotWheelYLimits();
+      var yr = wheelZoomRange(axes.yaxis.min, axes.yaxis.max, axes.yaxis.c2p(cy), amount, yl[0], yl[1]);
+      if(yr) {
+        o.yaxes[0].min = yr.min; o.yaxes[0].max = yr.max;
+        if(o.yaxes[1]) { o.yaxes[1].min = yr.min; o.yaxes[1].max = yr.max; }   // a second Y axis follows (none here)
+        res.y = true;
+      }
+    }
+    if(res.x || res.y) {
+      plot.setupGrid();
+      plot.draw();
+    }
+    return res;
+  }
+
+  // jquery.mousewheel handler of #plot_holder
+  function plotWheelEvent(event, delta) {
+    event.preventDefault();      // no page scroll, no history navigation of ALT + wheel (Firefox)
+    event.stopPropagation();
+    plot_wheel.over = true;
+    plot_wheel.shift = !!event.shiftKey;
+    plot_wheel.alt = !!event.altKey;
+    plotWheelCursor();
+    if(!plot) return false;
+    var dir = event.deltaY || -event.deltaX || delta || 0;
+    if(!dir) return false;
+    var off = plot.offset();
+    var r = plotWheelZoom(plotWheelMode(event.shiftKey, event.altKey), event.pageX - off.left, event.pageY - off.top, dir > 0);
+    if(r.x || r.y) {
+      updateRanges();
+      updateTriggerSlider();
+    }
+    // X window to the server (debounced, see initPlot())
+    if(r.x) $('#plot_holder').trigger('plotzoom');
+    return false;
+  }
+
+  // Cursor of the plot: double arrow while SHIFT or ALT is down with the mouse over the plot
+  function plotWheelCursor() {
+    var mode = (plot_wheel.over ? plotWheelMode(plot_wheel.shift, plot_wheel.alt) : 'xy');
+    $('#plot_holder').toggleClass('wheel-zoom-x', mode === 'x').toggleClass('wheel-zoom-y', mode === 'y');
+  }
+
+  // Modifier keys from any key or mouse event (keyup of SHIFT gives shiftKey false, keydown of ALT altKey true)
+  function plotWheelMods(e) {
+    var shift = !!e.shiftKey, alt = !!e.altKey;
+    if(shift !== plot_wheel.shift || alt !== plot_wheel.alt) {
+      plot_wheel.shift = shift;
+      plot_wheel.alt = alt;
+      plotWheelCursor();
+    }
+  }
+
+  function plotWheelKey(e) {
+    plotWheelMods(e);
+    // ALT alone over the plot: no default action (Firefox shows its menu bar when ALT is released, and the menu
+    // takes the next keys). Only the ALT key itself: ALT + another key (shortcuts) is not touched.
+    if(plot_wheel.over && (e.key === 'Alt' || e.keyCode === 18)) e.preventDefault();
+  }
+
+  // Window or tab without focus: the keyup may never come, back to the normal cursor
+  function plotWheelReset() {
+    plot_wheel.shift = false;
+    plot_wheel.alt = false;
+    plotWheelCursor();
+  }
+
+  function plotWheelBind() {
+    if(plot_wheel.bound) return;
+    plot_wheel.bound = true;
+    $('#plot_holder')
+      .on('mousewheel', plotWheelEvent)
+      .on('mouseenter mousemove', function(e) {
+        if(!plot_wheel.over) { plot_wheel.over = true; plotWheelCursor(); }
+        plotWheelMods(e);
+      })
+      .on('mouseleave', function() { plot_wheel.over = false; plotWheelCursor(); });
+    $(document).on('keydown keyup', plotWheelKey);
+    $(window).on('blur', plotWheelReset);
+    $(document).on('visibilitychange', function() { if(document.hidden) plotWheelReset(); });
+  }
+  // [PLOT WHEEL END]
 
   function onDropdownChange(that, param_name, do_get) {
 
@@ -2819,8 +2986,25 @@
     if ( $.inArray( param_name, [ 'lock_pidB_PSR', 'lock_pidB_ISR', 'lock_pidB_DSR', 'lock_pidB_SAT' ] )>-1 ) lock_pidB_update() ;
     if ( $.inArray( param_name, [ 'lock_lpf_F1_tau', 'lock_lpf_F1_order', 'lock_lpf_F2_tau', 'lock_lpf_F2_order', 'lock_lpf_F3_tau', 'lock_lpf_F3_order', 'lock_lpf_sq_tau', 'lock_lpf_sq_order' ] )>-1 ) lpf_update();
 
+    // Ext Trig before this change (the rule below applies only to a new value)
+    var ext_prev = (param_name == 'dummy_trig_sw' && params.local ? Number(params.local.dummy_trig_sw) : null);
+    var restart = false;
     var dv = parseInt(that.val());
     if(isFinite(dv)) params.local[param_name] = dv;  // a <select> without selection gives NaN: not copied
+    // Ext Trig sets the Trigger panel (lock_in+pid_harmonic v2.3.24): the user picks another Ext Trig that is not
+    // None: the scope triggers on it at once (Source = External, Mode = Normal), in the same POST. Only here, in
+    // the handler of the select: Config load, the restore of the state, Reset zoom and AUTO set their own values
+    // and do not go through it. None changes nothing else.
+    if(param_name == 'dummy_trig_sw' && isFinite(dv) && dv != 0 && dv !== ext_prev) {
+      if(Number(params.local.trig_mode) != 1) { restart = true; do_get = true; }   // as a change of Mode
+      params.local.trig_source = 2;
+      params.local.trig_mode   = 1;
+      $('#trig_source').val(2);
+      $('#trig_mode').val(1);
+      autorun = 1;
+      $('#btn_single').prop('disabled', true);
+    }
+    if(restart) runStop();
     sendParams(do_get);
     that.blur();
     user_editing = false;
@@ -3643,6 +3827,33 @@
     sendParams(true, true);
   }
 
+  // [RESET ZOOM BEGIN] (port of lock_in+pid_harmonic v2.3.21 without the ramp / modulation periods: this App has no
+  // preset sweeps; pure functions, also run by tests/reset_zoom_sim.js)
+  // Decimation of each scope time_range (src/fpga.c, osc_fpga_cnv_time_range_to_dec()) and length of one memory of
+  // the scope (16384 samples of 8 ns) at Dec 1, in seconds.
+  var scope_dec_list = [1, 8, 64, 128, 256, 512, 1024, 8192, 65536, 524288];
+  var scope_mem_s    = 16384 * 8e-9;
+  // Margin under the length of a memory: the server keeps xmin/xmax in float (32 bits) and takes the smallest Dec
+  // whose memory covers the window (src/main.c, transform_acq_params()), so a window of exactly one memory could
+  // round up and take the next Dec (x8 coarser).
+  var reset_zoom_margin = 1e-6;
+
+  // Window of Reset Zoom, from the scope params p (params.local) and the current scope time_range: one whole memory
+  // of the scope at the current Dec (16384 * 8 ns * Dec) from t = 0 (the trigger), so the time scale chosen by the
+  // user (X+/X-, zoom, AUTO) is kept and the whole acquisition is shown. The server picks the same Dec for it.
+  // Y: -1 V .. +1 V, or -8192 .. 8192 (ADC counts) in raw mode.
+  // (Before: X 0..130 us at Dec 1 whatever the time scale, and Y +-gui_reset_y_range/2 also in raw mode: +-1 count.)
+  // Returns { xmin_s, xmax_s, ymin, ymax, dec }.
+  function resetZoomWindow(p, time_range) {
+    var tr = Math.round(Number(time_range));
+    if(!(tr >= 0 && tr < scope_dec_list.length)) tr = 0;
+    var mem_s = scope_dec_list[tr] * scope_mem_s;
+    var raw = !!Number(p.dummy_osc_raw_mode);
+    return { xmin_s: 0, xmax_s: mem_s * (1 - reset_zoom_margin),
+             ymin: (raw ? -8192 : -1), ymax: (raw ? 8192 : 1), dec: scope_dec_list[tr] };
+  }
+  // [RESET ZOOM END]
+
   function resetZoom() {
     if(! plot) {
       return;
@@ -3650,27 +3861,44 @@
 
     $('#btn_ch1, #btn_ch2').data('checked', true).removeClass('btn-default').addClass('btn-primary');
 
-    var ymax = params.original.gui_reset_y_range / 2;
-    var ymin = ymax * -1;
+    var tr = (params.original && isFinite(params.original.time_range) ? params.original.time_range : params.local.time_range);
+    var w = resetZoomWindow(params.local, tr);
+    console.log('Reset zoom: one memory of the scope -> window 0 .. ' + w.xmax_s.toPrecision(6) + ' s (Dec ' + w.dec + ')');
 
-    $.extend(true, plot_options, {
-      xaxis: { min: null, max: null },
-      yaxis: { min: ymin, max: ymax }
-    });
+    resetZoomY(w.ymin, w.ymax);
 
+    // params.local.xmin/xmax and the plot x axis, in the current time units; the server picks the Dec from them and,
+    // if the units change, answers with forceX in the new ones (as a zoom does)
+    scopeSetXWindow(w.xmin_s, w.xmax_s);
+
+    $.extend(true, plot_options, { xaxis: { min: params.local.xmin, max: params.local.xmax } });
+
+    updateRanges();
+    updateTriggerSlider();
+    sendParams(true, true);
+  }
+
+  // Y axis of the plot (and of plot_options) to ymin..ymax, without drawing (the caller does)
+  function resetZoomY(ymin, ymax) {
     var options = plot.getOptions();
-    options.xaxes[0].min = null;
-    options.xaxes[0].max = null;
     options.yaxes[0].min = ymin;
     options.yaxes[0].max = ymax;
+    if(options.yaxes[1]) { options.yaxes[1].min = ymin; options.yaxes[1].max = ymax; }   // this App has one Y axis
+    $.extend(true, plot_options, { yaxis: { min: ymin, max: ymax } });
+  }
 
-    plot.setupGrid();
-    plot.draw();
-
-    params.local.xmin = xmin;
-    params.local.xmax = xmax;
-
-    sendParams(true, true);
+  // X window of the scope in seconds -> params.local.xmin/xmax (current time units) and the plot X axis
+  function scopeSetXWindow(xmin_s, xmax_s) {
+    var tu = Number(params.local.time_units), f = timeUnitFactor(isFinite(tu) ? tu : 0);
+    params.local.xmin = xmin_s * f;
+    params.local.xmax = xmax_s * f;
+    if(plot) {
+      var o = plot.getOptions();
+      o.xaxes[0].min = params.local.xmin;
+      o.xaxes[0].max = params.local.xmax;
+      plot.setupGrid();
+      plot.draw();
+    }
   }
 
   function updateZoom() {
@@ -4475,7 +4703,7 @@
         <button id="btn_autoscale_y" class="btn btn-primary btn-lg" data-autozoom="false" onclick="autoscaleY()">
           <span class="glyphicon glyphicon-resize-vertical"></span> Autoscale
         </button>
-        <button class="btn btn-primary btn-lg" onclick="resetZoom()">
+        <button class="btn btn-primary btn-lg" onclick="resetZoom()" title="X: one whole memory of the scope at the current Dec (16384 samples), from t = 0. Y: -1 V .. 1 V (raw mode: -8192 .. 8192)">
           <span class="glyphicon glyphicon-retweet"></span> Reset zoom
         </button>
         <div id="selzoompan" class="btn-group" data-toggle="buttons">
@@ -4556,8 +4784,8 @@
                             <option  value="27">0</option>
                             <option  value="28">0</option>
                             <option  value="29">0</option>
-                            <!--option value="30">0</option-->
-                            <!--option value="31">0</option-->
+                            <option  value="30">0</option>
+                            <option  value="31">0</option>
                           </select>
                         </div>
                       </div>
@@ -4599,8 +4827,8 @@
                             <option  value="27">0</option>
                             <option  value="28">0</option>
                             <option  value="29">0</option>
-                            <!--option value="30">0</option-->
-                            <!--option value="31">0</option-->
+                            <option  value="30">0</option>
+                            <option  value="31">0</option>
                           </select>
                         </div>
                       </div>
@@ -4761,22 +4989,7 @@
                             <label for="dummy_slow_out1_sw" class="col-xs-4 control-label">Slow out1:</label>
                             <div class="col-xs-8">
                               <select id="dummy_slow_out1_sw" class="form-control">
-                                <option  value="0" selected="selected">0</option>
-                                <option  value="1">in1</option>
-                                <option  value="2">in2</option>
-                                <option  value="3">in1-in2</option>
-                                <option  value="4">sin_ref</option>
-                                <option  value="5">cos_1f</option>
-                                <option  value="6">cos_2f</option>
-                                <option  value="7">cos_3f</option>
-                                <option  value="8">sq_ref</option>
-                                <option  value="9">sq_phas</option>
-                                <option  value="10">Ramp A</option>
-                                <option  value="11">PID A out</option>
-                                <option  value="12">ctrl_A</option>
-                                <option  value="13">ctrl_B</option>
-                                <option  value="14">error</option>
-                                <option  value="15">aux_A</option>
+                                <option  value="0" selected="selected">0 (no muxer in dummy.v)</option>
                               </select>
                             </div>
                           </div>
@@ -4788,22 +5001,7 @@
                             <label for="dummy_slow_out2_sw" class="col-xs-4 control-label">Slow out2:</label>
                             <div class="col-xs-8">
                               <select id="dummy_slow_out2_sw" class="form-control">
-                                <option  value="0" selected="selected">0</option>
-                                <option  value="1">in1</option>
-                                <option  value="2">in2</option>
-                                <option  value="3">in1-in2</option>
-                                <option  value="4">cos_ref</option>
-                                <option  value="5">cos_1f</option>
-                                <option  value="6">cos_2f</option>
-                                <option  value="7">cos_3f</option>
-                                <option  value="8">sq_quad</option>
-                                <option  value="9">sq_phas</option>
-                                <option  value="10">Ramp B</option>
-                                <option  value="11">PID A out</option>
-                                <option  value="12">ctrl_A</option>
-                                <option  value="13">ctrl_B</option>
-                                <option  value="14">error</option>
-                                <option  value="15">aux_B</option>
+                                <option  value="0" selected="selected">0 (no muxer in dummy.v)</option>
                               </select>
                             </div>
                           </div>

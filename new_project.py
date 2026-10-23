@@ -18,11 +18,12 @@ Steps:
   1. read and validate the .ini (nothing is written if it has errors)
   2. copy the template and the project files into a temporary folder
   3. set the App name (web page, info.json, fpga.conf, upload script), the optional Red Pitaya blocks
-     (signal generator / PIDs) and the icons
+     (signal generator / PIDs) and the logo (resources/logo.svg/png, <App>/info/icon.png)
   4. run <App>/config_tool.py -a, which writes the registers into dummy.v, the C code and the web page
   5. rename the temporary folder to the final one (on any error it is removed)
 
-Requires Python >= 3.8 (standard library only). ImageMagick (mogrify) is optional, for the icon labels.
+Requires Python >= 3.8 (standard library only). To draw the App name on the logo one of these is used, if
+available: the Python module cairosvg, rsvg-convert (librsvg2-bin) or inkscape; otherwise the generic logo.
 """
 
 import argparse
@@ -48,15 +49,11 @@ EXIT_OK, EXIT_CONFIG, EXIT_USAGE, EXIT_FAIL = 0, 1, 2, 3
 
 # build products and caches that may be in the template folder and must not be copied
 TEMPLATE_IGNORE = shutil.ignore_patterns(
-    '__pycache__', '*.pyc', '*.bak', '*.so', '*.o', 'obj', 'obj_dbg', 'obj_rld',
-    'target', 'target_dbg', 'target_rld', '.Xil', '.srcs', '.gen', 'out', 'sdk', 'project', 'build',
+    '__pycache__', '*.pyc', '*.bak', '*.so', '*.o', 'obj',
+    'target', '.Xil', '.srcs', '.gen', 'out', 'sdk', 'project', 'build',
     'synReport*', 'red_pitaya_eco1.bit',
     'vivado*.log', 'vivado*.jou', '*.jou', 'usage_statistics_webtalk.*', 'red_pitaya.bit',
     'fpga.bit', 'fpga.bit.bin', 'fpga.bif')
-
-# fonts tried for the icon label (the first one installed is used)
-ICON_FONTS = ('DejaVu-Sans-Bold', 'FreeSans-Bold', 'FreeSans-Negrita', 'Liberation-Sans-Bold', 'Helvetica-Bold')
-
 
 class GenerationError(Exception):
     """Error while creating the App (the temporary folder is removed)"""
@@ -116,34 +113,6 @@ def write_settings(path, cfg):
         f'RPOPTS={cfg.ssh_opts}',
         f'RPSCP={cfg.scp_opts}',
         '', '']), encoding='utf-8')
-
-
-# ------------------------------------------------------------------------------------------------
-# Icons
-
-def label_icons(app_dir, app_name):
-    """Write the App name at the bottom of the icons (ImageMagick). Returns a message or None if OK."""
-    mogrify = shutil.which('mogrify')
-    if mogrify is None:
-        return 'ImageMagick (mogrify) not found: icons without label'
-    font = None
-    try:
-        fonts = subprocess.run(['convert', '-list', 'font'], capture_output=True, text=True, timeout=30).stdout
-        for name in ICON_FONTS:
-            if re.search(rf'Font:\s+{re.escape(name)}\s*$', fonts, flags=re.M):
-                font = name
-                break
-    except (OSError, subprocess.SubprocessError):
-        pass
-    size = 20 if len(app_name) <= 8 else max(9, int(160 / len(app_name)))
-    draw = f"gravity south ; fill black text 0,12 '{app_name}' ; fill white text 1,11 '{app_name}'"
-    for icon in ('icon.png', 'icon_DEBUG.png', 'icon_RELOAD.png'):
-        cmd = [mogrify] + (['-font', font] if font else []) + ['-pointsize', str(size), '-draw', draw,
-                                                               str(app_dir / 'info' / icon)]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            return f'mogrify failed ({r.stderr.strip()[:200]}): icons without label'
-    return None
 
 
 # ------------------------------------------------------------------------------------------------
@@ -244,13 +213,16 @@ def generate(cfg, ini_path, project_dir, args):
             edit_file(app_dir / 'src' / 'pid.h', [(r'^#define PID_FPGA_HAS_PID 1', '#define PID_FPGA_HAS_PID 0')],
                       count={r'^#define PID_FPGA_HAS_PID 1': 1})
 
-        if args.no_icon:
-            say('[5/6] Icons: not labeled (--no-icon)')
-        else:
-            say('[5/6] Icons: App name on icon.png, icon_DEBUG.png, icon_RELOAD.png')
-            msg = label_icons(app_dir, app)
-            if msg:
-                say(f'      WARNING: {msg}')
+        tool = 'none' if args.no_icon else args.icon_tool
+        say(f'[5/6] Logo: App name in resources/logo.svg -> resources/logo.png ({config_lib.LOGO_SIZE}x'
+            f'{config_lib.LOGO_SIZE}) -> {app}/info/icon.png' + ('' if tool == 'auto' else f' [{tool}]'))
+        res = tmp_dir / 'resources'
+        used, warns = config_lib.make_logo(res / 'logo.svg', res / 'logo.svg', res / 'logo.png', app,
+                                           icon_out=app_dir / 'info' / 'icon.png', tool=tool)
+        for w in warns:
+            say(f'      WARNING: {w}')
+        if used:
+            say(f'      rendered with {used}')
 
         say(f'[6/6] Registers -> dummy.v, C controller, web page, py/hugo.py, tcl: {app}/config_tool.py -a')
         r = subprocess.run([sys.executable, '-B', str(app_dir / 'config_tool.py'), '-a'],
@@ -293,7 +265,8 @@ def main(argv=None):
                '  checkbox  1 bit\n'
                '  button    1 bit, toggles\n'
                '  monitor   read only value shown with a bar, bits_number 1..32, signed True/False\n'
-               'optional keys: label, default (reset value).  See config.ini for an example.\n\n'
+               'optional keys: label, default (reset value); section [names]: texts of muxer inputs in the\n'
+               'combo boxes (wire = text).  See config.ini for an example.\n\n'
                'examples:\n'
                '  ./new_project.py -n -c my.ini my_app          check my.ini and show the register map\n'
                '  ./new_project.py -c my.ini -o ~/rp my_app     create ~/rp/rp_my_app/my_app/\n'
@@ -317,7 +290,11 @@ def main(argv=None):
                         help='only (re)write _settings.env of an existing project from [general] rp_host, '
                              'ssh_opts, scp_opts')
     parser.add_argument('--no-icon', action='store_true',
-                        help='do not write the App name on the icons (no ImageMagick needed)')
+                        help='do not render the logo: the App uses the generic resources/logo.png as icon '
+                             '(the name is still written in resources/logo.svg)')
+    parser.add_argument('--icon-tool', choices=('auto',) + config_lib.LOGO_TOOLS, default='auto',
+                        help='tool that renders resources/logo.svg (default auto: the first available of '
+                             'cairosvg, rsvg-convert, inkscape)')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='also show the output of config_tool.py')
     args = parser.parse_args(argv)
@@ -390,7 +367,8 @@ def main(argv=None):
     say('Next steps:')
     say(f'  cd {project_dir}')
     say(f'  # write your logic in {app}/fpga/prj/v0.94/rtl/dummy.v (registers listed in its "ADDED REGS" block)')
-    say(f'  # after editing {app}/app.ini or adding modules to {app}/fpga/prj/v0.94/rtl/dummy/: ./{app}/config_tool.py -a')
+    say(f'  # after editing {app}/app.ini or instantiating in dummy.v a module of {app}/fpga/prj/v0.94/rtl/dummy/: '
+        f'./{app}/config_tool.py -a')
     say(f'  # FPGA: Vivado 2020.1 (fpga/); optional Vivado 2015.2 bitstream for Ecosystem 0.9x/1.0: make -C {app} eco1')
     say('  source settings.sh && LANG=C make')
     return EXIT_OK

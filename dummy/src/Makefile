@@ -8,18 +8,10 @@ CFLAGS+= -Wall -Werror -g -fPIC $(INCLUDE)
 # does not depend on the libraries the server happens to have loaded)
 LDFLAGS=-shared -lm -lpthread
 
-CONTROLLER     = ../controllerhf.so
-CONTROLLER_DBG = ../controllerhf_dbg.so
-CONTROLLER_RLD = ../controllerhf_rld.so
+CONTROLLER = ../controllerhf.so
 
-# Each controller is compiled into its own object folder, with its own defines:
-#   controllerhf.so      normal
-#   controllerhf_dbg.so  -DDEBUG=1  (TRACE() messages on stderr, see main.h)
-#   controllerhf_rld.so  -DRELOAD   (does not write the dummy registers on start, see main.c)
-# (Before, the sources were edited with sed after the objects were compiled: the three .so were identical.)
-OBJ_N = $(addprefix obj/,$(OBJECTS))
-OBJ_D = $(addprefix obj_dbg/,$(OBJECTS))
-OBJ_R = $(addprefix obj_rld/,$(OBJECTS))
+# Objects in obj/. For the TRACE() messages (stderr, nginx log) uncomment "#define DEBUG 1" in main.h.
+OBJ_N   = $(addprefix obj/,$(OBJECTS))
 HEADERS = $(wildcard *.h)
 
 all: $(CONTROLLER)
@@ -28,24 +20,10 @@ obj/%.o: %.c $(HEADERS)
 	@mkdir -p obj
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-obj_dbg/%.o: %.c $(HEADERS)
-	@mkdir -p obj_dbg
-	$(CC) $(CFLAGS) -DDEBUG=1 -c -o $@ $<
-
-obj_rld/%.o: %.c $(HEADERS)
-	@mkdir -p obj_rld
-	$(CC) $(CFLAGS) -DRELOAD -c -o $@ $<
-
 $(CONTROLLER): $(OBJ_N)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-$(CONTROLLER_DBG): $(OBJ_D)
-	$(CC) -o $@ $^ $(CFLAGS) -DDEBUG=1 $(LDFLAGS)
-
-$(CONTROLLER_RLD): $(OBJ_R)
-	$(CC) -o $@ $^ $(CFLAGS) -DRELOAD $(LDFLAGS)
-
 clean:
-	-$(RM) -rf obj obj_dbg obj_rld *.o
+	-$(RM) -rf obj *.o
 
 .PHONY: all clean

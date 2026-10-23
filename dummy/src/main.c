@@ -409,13 +409,7 @@ int rp_app_init(void)
 
     TRACE("LOLO(rp_app_init): PARAMS_NUM: %d \n", PARAMS_NUM);
 
-#ifdef RELOAD
-    /* controllerhf_rld.so (App "_RELOAD", built with -DRELOAD): the registers of the dummy module are
-     * not written on start, so the FPGA keeps its state while the web page is reloaded */
-    rp_set_params(&rp_main_params[0], PARAMS_DUMMY_PARAMS - 1 );
-#else
     rp_set_params(&rp_main_params[0], PARAMS_NUM );
-#endif
 
     TRACE("LOLO(rp_app_init): END\n");
 

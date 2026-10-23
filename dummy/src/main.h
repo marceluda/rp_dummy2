@@ -15,6 +15,7 @@
 #ifndef __MAIN_H
 #define __MAIN_H
 
+// Uncomment for the TRACE() messages (stderr: log of nginx), then rebuild the controller
 // #define DEBUG 1
 
 
