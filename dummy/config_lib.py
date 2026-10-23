@@ -1423,6 +1423,10 @@ def update_file_match(filename, tag=('start_tag','stop_tag'), txt=''):
 #   signed      = True               # number, monitor
 #   default     = 0                  # optional: value after reset (not for monitor)
 #   options     = off, slow, fast    # optional, combo only: text of the options (0, 1, 2...)
+#   display     = int                # optional, monitor only: int (default, the raw integer) or volts
+#                                    # (raw / 8192 V: 14-bit ADC/DAC scale, 8192 counts = 1 V)
+#   scale       = 0.001              # optional, monitor only: show raw * scale ...
+#   unit        = s                  # ... with this unit (SI prefixes are added: ms, us...)
 
 CONTROL_TYPES = {
     # type      : (html type, bits allowed, signed allowed, read only)
@@ -1488,6 +1492,8 @@ class control():
         self.signed  = signed
         self.default = default
         self.options = options
+        self.scale   = 0       # monitors: 0 = show the integer; otherwise raw * scale [unit]
+        self.unit    = ''
         self.htype   = CONTROL_TYPES[ctype][0]
         self.ro      = CONTROL_TYPES[ctype][3]
     @property
@@ -1594,7 +1600,7 @@ def load_app_ini(filename, app_name=None):
         if ctype not in CONTROL_TYPES:
             errors.append(f'{what}: type = "{opts.get("type", "")}" unknown, use one of: {", ".join(CONTROL_TYPES)}')
             continue
-        known = {'type', 'label', 'bits_number', 'signed', 'default', 'options'}
+        known = {'type', 'label', 'bits_number', 'signed', 'default', 'options', 'display', 'scale', 'unit'}
         for k in opts:
             if k not in known:
                 cfg.warnings.append(f'{what} {k}: unknown key, ignored')
@@ -1653,6 +1659,34 @@ def load_app_ini(filename, app_name=None):
                     errors.append(f'{what}: empty option or option with < >')
                 else:
                     c.options = items
+
+        # How a monitor is shown in the web page (Raw Mode always shows the integer)
+        if any(k in opts for k in ('display', 'scale', 'unit')):
+            if ctype != 'monitor':
+                cfg.warnings.append(f'{what}: display/scale/unit are only for monitors, ignored')
+            else:
+                disp = opts.get('display', 'scaled' if 'scale' in opts else 'int').strip().lower()
+                unit = opts.get('unit', '').strip()
+                if unit and not re.match(r'^[A-Za-z0-9%/._ -]{1,12}$', unit):
+                    errors.append(f'{what}: unit = "{unit}": up to 12 letters, digits, %, /, ., _, - or spaces')
+                if disp == 'int':
+                    if 'scale' in opts or unit:
+                        cfg.warnings.append(f'{what}: display = int: scale/unit ignored')
+                elif disp == 'volts':
+                    c.scale, c.unit = 1/8192, (unit if unit else 'V')
+                    if 'scale' in opts:
+                        cfg.warnings.append(f'{what}: display = volts: scale ignored (1/8192)')
+                elif disp == 'scaled':
+                    try:
+                        c.scale = float(opts.get('scale', ''))
+                    except ValueError:
+                        errors.append(f'{what}: scale = "{opts.get("scale", "")}" is not a number')
+                    else:
+                        if c.scale == 0 or c.scale != c.scale or abs(c.scale) == float('inf'):
+                            errors.append(f'{what}: scale must be a finite number other than 0')
+                    c.unit = unit
+                else:
+                    errors.append(f'{what}: display = "{disp}": use int, volts or scaled (with scale = ...)')
 
         cfg.controls.append(c)
 

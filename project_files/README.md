@@ -25,5 +25,14 @@ The FPGA is synthesized with Vivado 2015.2 (`red_pitaya.bit`, loaded by Ecosyste
 
 ## Upload
 
+**Ecosystem 2.0 and `nginx.conf`:** nginx reads the `nginx.conf` of the Apps only when it starts. After the
+first upload of an App (or when its `nginx.conf` changes) restart it: `./upload_app.sh -r rp-XXXXXX.local`
+does it (`systemctl restart redpitaya_nginx`, which stops the running App), otherwise the script reminds you.
+Close or stop the App before uploading it. `upload_app.sh` uses your usual ssh keys/agent; if the board does
+not accept them, ssh asks for the root password (`ssh-copy-id root@rp-XXXXXX.local` installs your key).
+
+The log of nginx shows one `Application not loaded ... POST /data` line each time the page opens: it is the
+check the page makes before starting the App, not an error.
+
 `_settings.env` has the address of the board (`RPIP=...`); `make upload`, or `./upload_app.sh rp-XXXXXX.local`
 from a package of `archive/`.

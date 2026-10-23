@@ -112,6 +112,15 @@ takes the board, and restores its state after a restart.
 
 ## Upload testing application to a Red Pitaya device
 
+**Ecosystem 2.0 and `nginx.conf`:** nginx reads the `nginx.conf` of the Apps only when it starts. After the
+first upload of an App (or when its `nginx.conf` changes) restart it: `./upload_app.sh -r rp-XXXXXX.local`
+does it (`systemctl restart redpitaya_nginx`, which stops the running App), otherwise the script reminds you.
+Close or stop the App before uploading it. `upload_app.sh` uses your usual ssh keys/agent; if the board does
+not accept them, ssh asks for the root password (`ssh-copy-id root@rp-XXXXXX.local` installs your key).
+
+The log of nginx shows one `Application not loaded ... POST /data` line each time the page opens: it is the
+check the page makes before starting the App, not an error.
+
 The file _settings.env of the project (written by new_project.py from [general] rp_host, ssh_opts, scp_opts;
 `new_project.py -u` rewrites it) has the parameters for ssh testing upload
 

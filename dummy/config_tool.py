@@ -275,6 +275,8 @@ h.set_global_configs()
 mons = [ c for c in cfg.controls if c.type == 'monitor' ]
 mon_txt   = ','.join([ 'dummy_'+c.name for c in mons ])
 nbits_txt = ','.join([ ('-' if c.signed else '')+str(c.nbits) for c in mons ])
+scale_txt = ','.join([ repr(float(c.scale)) if c.scale else '0' for c in mons ])
+unit_txt  = ','.join([ "'"+c.unit+"'" for c in mons ])
 h.html_global_configs.append(
         html_global_config( regex_start = r' *let *mon *=',
                             regex_end   = r'.*;.*',
@@ -283,6 +285,14 @@ h.html_global_configs.append(
         html_global_config( regex_start = r' *let *nbits *=',
                             regex_end   = r'.*;.*',
                             text        = f"let nbits = [{nbits_txt}] ; // Monitor controls bit numbers" ) )
+h.html_global_configs.append(
+        html_global_config( regex_start = r' *let *mon_scale *=',
+                            regex_end   = r'.*;.*',
+                            text        = f"let mon_scale = [{scale_txt}] ; // Monitor display scale (0 = integer)" ) )
+h.html_global_configs.append(
+        html_global_config( regex_start = r' *let *mon_unit *=',
+                            regex_end   = r'.*;.*',
+                            text        = f"let mon_unit = [{unit_txt}] ; // Monitor display units" ) )
 
 if __name__ == '__main__' and args.do_html:
     print('do_html')

@@ -95,6 +95,7 @@ target_dbg/$(APP)_DEBUG: red_pitaya.bit $(FPGA_BIN) $(CONTROLLER_DBG) index.html
 	find target_dbg -name __pycache__ -type d -prune -exec rm -rf {} +
 	sed -i target_dbg/upload_app.sh -e 's?^APP="$(APP)"?APP="$(APP)_DEBUG"?'
 	sed -i target_dbg/$(APP)_DEBUG/info/info.json -e 's/REVISION/$(REVISION)_DEBUG/'
+	sed -i target_dbg/$(APP)_DEBUG/info/info.json -e 's/"name": *"$(APP)"/"name": "$(APP) (DEBUG)"/'
 	sed -i target_dbg/$(APP)_DEBUG/info/info.json -e 's/BUILD_NUMBER/$(BUILD_NUMBER)/'
 	sed -i target_dbg/$(APP)_DEBUG/index.html -e "s/\(\\s*\)var\\s*app_version\\s*=\\s*'VERSION'\\s*;\\s*/\\1var app_version = '$(VER)-$(BUILD_NUMBER)-$(REVISION)_DEBUG';/"
 	sed -i target_dbg/$(APP)_DEBUG/index.html -e "s/\(\\s*\)var\\s*app_id\\s*=\\s*'$(APP)'\\s*;\\s*/\\1var app_id = '$(APP)_DEBUG';/"
@@ -116,6 +117,7 @@ target_rld/$(APP)_RELOAD: $(CONTROLLER_RLD) index.html
 	find target_rld -name __pycache__ -type d -prune -exec rm -rf {} +
 	sed -i target_rld/upload_app.sh -e 's?^APP="$(APP)"?APP="$(APP)_RELOAD"?'
 	sed -i target_rld/$(APP)_RELOAD/info/info.json -e 's/REVISION/$(REVISION)_RELOAD/'
+	sed -i target_rld/$(APP)_RELOAD/info/info.json -e 's/"name": *"$(APP)"/"name": "$(APP) (RELOAD)"/'
 	sed -i target_rld/$(APP)_RELOAD/info/info.json -e 's/BUILD_NUMBER/$(BUILD_NUMBER)/'
 	sed -i target_rld/$(APP)_RELOAD/index.html -e "s/\(\\s*\)var\\s*app_version\\s*=\\s*'VERSION'\\s*;\\s*/\\1var app_version = '$(VER)-$(BUILD_NUMBER)-$(REVISION)_RELOAD';/"
 	sed -i target_rld/$(APP)_RELOAD/index.html -e "s/\(\\s*\)var\\s*app_id\\s*=\\s*'$(APP)'\\s*;\\s*/\\1var app_id = '$(APP)_RELOAD';/"
