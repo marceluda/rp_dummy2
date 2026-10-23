@@ -5,7 +5,7 @@ new_project.py: create a new Red Pitaya App from the dummy template.
 
 The controls of the App (combo boxes, numbers, checkboxes, buttons and read-only monitors) are described
 in an .ini file (see config.ini). Each control becomes a register of the dummy FPGA module
-(fpga/rtl/dummy.v), a parameter of the C controller (src/) and an element of the web page (index.html),
+(fpga/prj/v0.94/rtl/dummy.v), a parameter of the C controller (src/) and an element of the web page (index.html),
 already connected: the web page reads and writes the FPGA registers. The user then writes the logic in
 dummy.v.
 
@@ -49,7 +49,8 @@ EXIT_OK, EXIT_CONFIG, EXIT_USAGE, EXIT_FAIL = 0, 1, 2, 3
 # build products and caches that may be in the template folder and must not be copied
 TEMPLATE_IGNORE = shutil.ignore_patterns(
     '__pycache__', '*.pyc', '*.bak', '*.so', '*.o', 'obj', 'obj_dbg', 'obj_rld',
-    'target', 'target_dbg', 'target_rld', '.Xil', '.srcs', 'out', 'sdk', 'project',
+    'target', 'target_dbg', 'target_rld', '.Xil', '.srcs', '.gen', 'out', 'sdk', 'project', 'build',
+    'synReport*', 'red_pitaya_eco1.bit',
     'vivado*.log', 'vivado*.jou', '*.jou', 'usage_statistics_webtalk.*', 'red_pitaya.bit',
     'fpga.bit', 'fpga.bit.bin', 'fpga.bif')
 
@@ -231,7 +232,10 @@ def generate(cfg, ini_path, project_dir, args):
             edits.append((r'^(`define\s+INCLUDE_GENFUN\b.*)$', r'// \1 (disabled: include_genfun = False)'))
         if not cfg.include_pids:
             edits.append((r'^(`define\s+INCLUDE_PIDS\b.*)$', r'// \1 (disabled: include_pids = False)'))
-        edit_file(app_dir / 'fpga' / 'rtl' / 'red_pitaya_top.v', edits, count={p: 1 for p, _ in edits})
+        # top of the optional Vivado 2015.2 design (fpga_eco1/) and of the Vivado 2020.1 design (fpga/, no ASG)
+        edit_file(app_dir / 'fpga_eco1' / 'rtl' / 'red_pitaya_top.v', edits, count={p: 1 for p, _ in edits})
+        edits_sv = [e for e in edits if 'INCLUDE_PIDS' in e[0]]
+        edit_file(app_dir / 'fpga' / 'prj' / 'v0.94' / 'rtl' / 'red_pitaya_top.sv', edits_sv, count={p: 1 for p, _ in edits_sv})
         # the C controller must not touch the address range of a removed block
         if not cfg.include_genfun:
             edit_file(app_dir / 'src' / 'generate.h', [(r'^#define GEN_FPGA_HAS_ASG 1', '#define GEN_FPGA_HAS_ASG 0')],
@@ -279,7 +283,7 @@ def main(argv=None):
         prog='new_project.py',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description='Create a Red Pitaya App from the dummy template. Every control of the .ini becomes a\n'
-                    'register of the FPGA module (fpga/rtl/dummy.v), a parameter of the C controller and an\n'
+                    'register of the FPGA module (fpga/prj/v0.94/rtl/dummy.v), a parameter of the C controller and an\n'
                     'element of the web page, already connected to each other. The App is created as a\n'
                     'standalone project folder: OUTPUT/PROJECT/ (Makefile, settings.sh, resources/...)\n'
                     'with the App in OUTPUT/PROJECT/NAME/.',
@@ -385,8 +389,9 @@ def main(argv=None):
     say(f'Done: {project_dir}')
     say('Next steps:')
     say(f'  cd {project_dir}')
-    say(f'  # write your logic in {app}/fpga/rtl/dummy.v (registers listed in its "ADDED REGS" block)')
-    say(f'  # after editing {app}/app.ini or adding modules to {app}/fpga/rtl/dummy/: ./{app}/config_tool.py -a')
+    say(f'  # write your logic in {app}/fpga/prj/v0.94/rtl/dummy.v (registers listed in its "ADDED REGS" block)')
+    say(f'  # after editing {app}/app.ini or adding modules to {app}/fpga/prj/v0.94/rtl/dummy/: ./{app}/config_tool.py -a')
+    say(f'  # FPGA: Vivado 2020.1 (fpga/); optional Vivado 2015.2 bitstream for Ecosystem 0.9x/1.0: make -C {app} eco1')
     say('  source settings.sh && LANG=C make')
     return EXIT_OK
 

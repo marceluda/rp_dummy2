@@ -36,6 +36,18 @@
 
 /** Bit mask in the trigger_source register for depicting the trigger source type. */
 #define OSC_FPGA_TRIG_SRC_MASK 0x00000007
+/** External trigger debounce written at start (register 0x90): 12500 x 8 ns = 100 us, so an external
+ *  trigger (Ext Trig of the dummy module) up to 10 kHz is seen; the factory value is 62500 (0.5 ms, 2 kHz). */
+#define OSC_FPGA_EXT_TRIG_DEB_LEN 12500
+
+/** Trigger source field (bits [3:0]) as read back from the trig_source register. */
+#define OSC_FPGA_TRIG_SRC_RD_MASK 0x0000000f
+/** conf bit 2 (R): trigger status. 0.9x: post-trigger delay running (adc_dly_do);
+ *  2.0 (v0.94, rp_scope_com): trigger received, sticky until next arm/reset (adc_trg_rd). */
+#define OSC_FPGA_CONF_TRIG_ST_BIT   0x4
+/** conf bit 4 (R), only in the 2.0 v0.94 scope: acquisition (post-trigger
+ *  delay) finished, sticky until next arm/reset (adc_dly_end). Reads 0 in 0.9x. */
+#define OSC_FPGA_CONF_ACQ_DONE_BIT  0x10
 /** Bit mask in the cha_thr register for depicting trigger threshold on channel A. */
 #define OSC_FPGA_CHA_THR_MASK  0x00003fff
 /** Bit mask in the cha_thr register for depicting trigger threshold on channel B. */
@@ -62,7 +74,10 @@ typedef struct osc_fpga_reg_mem_s {
     /** @brief  Configuration:
      * bit     [0] - arm_trigger
      * bit     [1] - rst_wr_state_machine
-     * bits [31:2] - reserved 
+     * bit     [2] - (R) trigger status (see OSC_FPGA_CONF_TRIG_ST_BIT)
+     * bit     [3] - arm_keep
+     * bit     [4] - (R) acquisition done, 2.0 only (OSC_FPGA_CONF_ACQ_DONE_BIT)
+     * bits [31:5] - reserved 
      */
     uint32_t conf;
 
@@ -99,10 +114,9 @@ typedef struct osc_fpga_reg_mem_s {
     uint32_t trigger_delay;
 
     /** @brief  Data decimation
-     * bits [16: 0] - decimation factor, legal values:
-     *   1, 8, 64, 1024, 8192 65536
-     *   If other values are written data is undefined 
-     * bits [31:17] - reserved
+     * bits [19: 0] - decimation factor (20 bits in the 2.0 scope, rp_scope_cfg.v; it was 17 in 0.9x).
+     *   The App uses 1, 8, 64, 128, 256, 512, 1024, 8192, 65536 and 524288 (osc_fpga_cnv_time_range_to_dec())
+     * bits [31:20] - reserved
      */
     uint32_t data_dec;
 
@@ -127,8 +141,12 @@ typedef struct osc_fpga_reg_mem_s {
      * bits [31:1] - reserved
      */
     uint32_t other;
-    
-    uint32_t reseved;
+
+    /** @brief Offset 0x2C (R) - v2.3.23: number of samples written into the buffer since the last arm and
+     * before the trigger (adc_we_cnt of rp_bram_sm.v / red_pitaya_scope.v, saturates at 2**32-1). It is the
+     * pre-trigger history of the current acquisition that really belongs to it (see osc_fpga_get_we_cnt()).
+     */
+    uint32_t we_cnt;
     
     /** @brief ChA Equalization filter
      * bits [17:0] - AA coefficient (pole)
@@ -180,8 +198,28 @@ typedef struct osc_fpga_reg_mem_s {
      * bits [31:25] - reserved
      */
     uint32_t chb_filt_pp;            
-    
-    
+
+    /** @brief Offsets 0x50 - 0x90: AXI/DMA and external trigger debouncer
+     * registers, not used by this application. */
+    uint32_t reserved_50_8c[16];
+
+    /** @brief Offset 0x90 - External trigger debounce length (set_deb_len, both scopes: 0.9x and 2.0)
+     * bits [19:0] - number of ADC clocks (8 ns) during which edges after an edge of the external trigger
+     *               are ignored. Factory reset value 62500 (0.5 ms). osc_fpga_init() writes
+     *               OSC_FPGA_EXT_TRIG_DEB_LEN.
+     */
+    uint32_t ext_trig_deb_len;
+
+    /** @brief Offset 0x94 - Trigger lock control (only in the 2.0 v0.94 scope,
+     * used by the Vivado 2020.1 FPGA design of the App, fpga/)
+     * bit [0] - (W) write 1 to unlock the trigger. After every trigger the
+     *           2.0 FPGA locks the trigger (trig_source bit 5 reads 1) and
+     *           ignores any new trigger until this bit is written (librp:
+     *           acq_Start() -> osc_SetUnlockTrigger()). In the 0.9x
+     *           scope (v0.3.x FPGA) this address is unmapped (write ignored).
+     */
+    uint32_t trigger_lock_ctr;
+
     /** @brief  ChA & ChB data - 14 LSB bits valid starts from 0x10000 and
      * 0x20000 and are each 16k samples long */
 } osc_fpga_reg_mem_t;
@@ -213,6 +251,9 @@ int   osc_fpga_set_trigger_delay(uint32_t trig_delay);
 int   osc_fpga_triggered(void);
 int   osc_fpga_get_sig_ptr(int **cha_signal, int **chb_signal);
 int   osc_fpga_get_wr_ptr(int *wr_ptr_curr, int *wr_ptr_trig);
+/* v2.3.23 */
+int   osc_fpga_trig_received(void);
+uint32_t osc_fpga_get_we_cnt(void);
 
 int   osc_fpga_cnv_trig_source(int trig_imm, int trig_source, int trig_edge);
 int   osc_fpga_cnv_time_range_to_dec(int time_range);

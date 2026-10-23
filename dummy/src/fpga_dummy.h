@@ -205,7 +205,7 @@ typedef struct dummy_reg_t {
 
 } dummy_reg_t;
 
-/* The struct must match the addresses of the FPGA registers (fpga/rtl/dummy.v) */
+/* The struct must match the addresses of the FPGA registers (fpga/prj/v0.94/rtl/dummy.v) */
 _Static_assert(offsetof(dummy_reg_t, oscA_sw) == 0x000, "dummy_reg_t.oscA_sw must be at 0x000");
 _Static_assert(offsetof(dummy_reg_t, oscB_sw) == 0x004, "dummy_reg_t.oscB_sw must be at 0x004");
 _Static_assert(offsetof(dummy_reg_t, osc_ctrl) == 0x008, "dummy_reg_t.osc_ctrl must be at 0x008");

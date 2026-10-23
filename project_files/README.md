@@ -6,20 +6,23 @@ from the controls of `@APP@/app.ini`.
 ## Build
 
 ```bash
-source settings.sh      # Vivado 2015.2 + Linaro toolchain (edit the paths if yours differ)
-LANG=C make             # controllerhf.so + FPGA + packages in archive/
+source settings.sh      # Linaro toolchain (+ Vivado 2015.2 for make eco1); edit the paths if yours differ
+LANG=C make             # controllerhf.so + FPGA (Vivado 2020.1) + packages in archive/
 ```
 
-The FPGA is synthesized with Vivado 2015.2 (`red_pitaya.bit`, loaded by Ecosystem 0.9x/1.0 through
-`fpga.conf`). For Ecosystem 2.0 the Makefile converts it with `bootgen` of Vivado 2020.1 into
-`fpga.bit.bin`, loaded by `fpga.sh` (set `BOOTGEN_SETTINGS=.../settings64.sh` if Vivado 2020.1 is not in
-`/tools/Xilinx/Vivado/2020.1`). Both go in the packages, with `nginx.conf` (no cache for `index.html`).
+The FPGA is synthesized with Vivado 2020.1 (`@APP@/fpga/`, RedPitaya-FPGA structure; its Makefile loads
+`/tools/Xilinx/Vivado/2020.1/settings64.sh` by itself, or `VIVADO_SETTINGS=...`): `red_pitaya.bit` and, with
+bootgen, `fpga.bit.bin` (Ecosystem 2.0, loaded by `fpga.sh`). For Ecosystem 0.9x/1.0 the packages carry
+`red_pitaya.bit` (`fpga.conf`); optional: `make -C @APP@ eco1` synthesizes the Vivado 2015.2 design of
+`@APP@/fpga_eco1/` (0.9x scope, same `dummy.v`), which then goes in the packages instead.
 
 ## Where to write your design
 
-- `@APP@/fpga/rtl/dummy.v`: your logic. The registers of the controls are already declared and connected to
+- `@APP@/fpga/prj/v0.94/rtl/dummy.v`: your logic. The registers of the controls are already declared and connected to
   the web page (see the `ADDED REGS` list near the top). Monitors are `wire`s: assign them a value.
-- `@APP@/fpga/rtl/dummy/`: put new Verilog modules here and run `@APP@/config_tool.py -t`.
+- `@APP@/fpga/prj/v0.94/rtl/dummy/`: put new Verilog modules here (the 2020.1 design takes every file of the
+  folder; run `@APP@/config_tool.py -t` to update the source list of `fpga_eco1/`). Module names must not
+  clash with the RedPitaya modules of `fpga/rtl/rtl/` (e.g. `debounce`).
 - `@APP@/app.ini`: the controls. After editing it, run `@APP@/config_tool.py -a` to regenerate the
   automatic parts of the sources (the code you wrote outside the `DOCK` markers is kept).
 

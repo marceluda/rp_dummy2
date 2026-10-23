@@ -12,6 +12,12 @@ import fileinput
 import shutil
 
 
+# User RTL of the App: the dummy module and its own modules (shared by the Vivado 2020.1 design of fpga/
+# and the optional Vivado 2015.2 design of fpga_eco1/)
+DUMMY_RTL_DIR = os.path.join('fpga', 'prj', 'v0.94', 'rtl')
+DUMMY_V       = os.path.join(DUMMY_RTL_DIR, 'dummy.v')
+
+
 def unique(values):
     """Sorted list of the distinct values (replaces numpy.unique, so numpy is not needed)"""
     return sorted(set(values))
@@ -113,7 +119,7 @@ class fpga_registers():
         return 4*self.next_index()
 
     def update_verilog_files(self,folder):
-        fpga_mod_fn = os.path.join('fpga','rtl','dummy.v')
+        fpga_mod_fn = DUMMY_V
         print('Updating verilog file: '+fpga_mod_fn)
         if not os.path.isdir(folder):
             raise ValueError('"folder" variable should be the source code folder path.')
@@ -890,7 +896,7 @@ def main_fpga_regs_def(f,indent=0):
     txt.nl()
     txt.add('} dummy_reg_t;')
     txt.nl()
-    txt.add('/* The struct must match the addresses of the FPGA registers (fpga/rtl/dummy.v) */')
+    txt.add('/* The struct must match the addresses of the FPGA registers (fpga/prj/v0.94/rtl/dummy.v) */')
     for r in sorted(f, key=lambda x: x.index):
         txt.add(f'_Static_assert(offsetof(dummy_reg_t, {r.name}) == 0x{4*r.index:03X}, "dummy_reg_t.{r.name} must be at 0x{4*r.index:03X}");')
     return txt.out()
@@ -1571,6 +1577,12 @@ def load_app_ini(filename, app_name=None):
         errors.append(f'App name "{cfg.app_name}": use letters, digits, "_", "+" or "-", starting with a letter')
     if 'include_genfun' in gen:
         cfg.include_genfun = _to_bool(gen['include_genfun'], '[general] include_genfun', errors)
+        if cfg.include_genfun:
+            # The Vivado 2020.1 FPGA of the App has no signal generator yet (its FIFO IP is not available for
+            # 2020.1): the same controller runs with both bitstreams, so the ASG is off everywhere
+            cfg.warnings.append('[general] include_genfun = True: the signal generator (ASG) is not available in the '
+                                'Ecosystem 2.0 FPGA of this version, it is not included')
+            cfg.include_genfun = False
     if 'include_pids' in gen:
         cfg.include_pids   = _to_bool(gen['include_pids']  , '[general] include_pids'  , errors)
     cfg.register_map = gen.get('register_map', 'fixed').strip().lower()

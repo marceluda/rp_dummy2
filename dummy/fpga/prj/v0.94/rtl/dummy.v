@@ -441,14 +441,14 @@ module dummy(
                                  external_trigger
                               } ;
 
-    trigger_input  #(.R(8),.N(3)) i_trigger_input (
-        // input
-        .clk(clk), .rst(rst),
-        .trig_in ( trigger_signals ),
-        .trig_sel( trig_sw         ),
-        // output
-        .trig_tick(trigger)
-    ) ;
+    // The selected signals (trig_sw is a bit mask of trigger_signals) go to the scope as a level (registered),
+    // so that the Edge selector of the scope works for External (rising / falling) and the scope debounces it
+    // (0x40100090). Before, trigger_input gave a short pulse on the rising edge: falling = rising.
+    reg ext_trig_level ;
+    always @(posedge clk)
+        if (rst) ext_trig_level <= 1'b0 ;
+        else     ext_trig_level <= |(trigger_signals & trig_sw) ;
+    assign trigger = ext_trig_level ;
 
 
 

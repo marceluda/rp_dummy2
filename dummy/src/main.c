@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <errno.h>
+#include <sys/time.h>
 
 #include "main.h"
 #include "version.h"
@@ -36,10 +37,10 @@ pthread_mutex_t rp_main_params_mutex = PTHREAD_MUTEX_INITIALIZER;
 static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
     { /* min_gui_time   */
         //"xmin", -1000000, 1, 0, -10000000, +10000000 },
-        "xmin", 0, 1, 0, -10000000, +10000000 },
+        "xmin", 0, 1, 0, -60000000, +60000000 },
     { /* max_gui_time   */
         //"xmax", +1000000, 1, 0, -10000000, +10000000 },
-        "xmax", 131, 1, 0, -10000000, +10000000 },
+        "xmax", 131, 1, 0, -60000000, +60000000 },
     { /* trig_mode:
        *    0 - auto
        *    1 - normal
@@ -67,10 +68,14 @@ static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
        *    0 - 1x
        *    1 - 8x
        *    2 - 64x
-       *    3 - 1kx
-       *    4 - 8kx
-       *    5 - 65kx   */
-        "time_range", 0, 1, 1,         0,         5 },
+       *    3 - 128x
+       *    4 - 256x
+       *    5 - 512x
+       *    6 - 1kx
+       *    7 - 8kx
+       *    8 - 65kx
+       *    9 - 524k (20-bit decimation of the 2.0 scope; the 0.9x scope of fpga_eco1 has 17 bits: 64k) */
+        "time_range", 0, 1, 1,         0,         9 },
     { /* time_unit_used:
        *    0 - [us]
        *    1 - [ms]
@@ -146,9 +151,9 @@ static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
        * GUI */
         "gen_DC_offs_2", 0, 1, 0, -100, 100 },
     { /* gui_xmin - Xmin as specified by GUI - not rounded to sampling engine quanta. */
-        "gui_xmin",      0, 0, 1, -10000000, +10000000 },
+        "gui_xmin",      0, 0, 1, -60000000, +60000000 },
     { /* gui_xmax - Xmax as specified by GUI - not rounded to sampling engine quanta. */
-        "gui_xmax",    131, 0, 1, -10000000, +10000000 },
+        "gui_xmax",    131, 0, 1, -60000000, +60000000 },
     { /* min_y_norm, max_y_norm - Normalized controller defined Y range when using auto-set */
         "min_y_norm", 0, 0, 0, -1000, +1000 },
     { /* min_y_norm, max_y_norm - Normalized controller defined Y range when using auto-set */
@@ -345,6 +350,25 @@ float forced_xmax = 0;
 float forced_units = 0;
 float forced_delay = 0;
 
+/* When the last forceX was issued (from rp_lock-in_pid_h v2.3.14). A GUI range more than 33x away from the
+ * forced one is taken as a POST still in the old time units and ignored, so a real zoom-out of more than 33x
+ * right after a change of units was lost. POSTs built before the GUI got the forced range arrive within ~1.1 s;
+ * after FORCEX_STALE_MS the GUI range is always taken. */
+#define FORCEX_STALE_MS 1500
+static struct timeval forcex_tv;
+
+static void forcex_mark(void)
+{
+    gettimeofday(&forcex_tv, NULL);
+}
+
+static long forcex_age_ms(void)
+{
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (now.tv_sec - forcex_tv.tv_sec) * 1000L + (now.tv_usec - forcex_tv.tv_usec) / 1000L;
+}
+
 
 const char *rp_app_desc(void)
 {
@@ -430,6 +454,10 @@ int time_range_to_time_unit(int range)
         break;
     case 2:
     case 3:
+    case 4:
+    case 5:
+    case 6:
+        /* 10 time ranges since the 2.0 scope (decimation 128/256/512/1k: ms) */
         unit = 1;
         break;
     default:
@@ -484,8 +512,9 @@ int transform_acq_params(rp_app_params_t *p)
         ratio = 1.0 / ratio;
     }
 
-    /* Stop forcing if factor 33 of difference or less */
-    if (ratio > 0.03) {
+    /* Stop forcing if factor 33 of difference or less, or if the forceX is not recent: the GUI already has
+     * the new units, the range is a real zoom */
+    if ((ratio > 0.03) || (forcex_state && (forcex_age_ms() > FORCEX_STALE_MS))) {
         p[FORCEX_FLAG_PARAM].value  = 0;
         forcex_state = 0;
     }
@@ -511,14 +540,14 @@ int transform_acq_params(rp_app_params_t *p)
     }
 
     /* Find optimal decimation setting */
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i <= 9; i++) {
         dec = osc_fpga_cnv_time_range_to_dec(i);
         if (dec >= rdec) {
             break;
         }
     }
-    if (i > 5)
-        i = 5;
+    if (i > 9)
+        i = 9;
 
     /* Apply decimation parameter (time range), but not when forcing GUI client
      * or during reset zoom.
@@ -588,6 +617,7 @@ int transform_acq_params(rp_app_params_t *p)
     if ((time_unit != time_unit_gui)) {
         p[FORCEX_FLAG_PARAM].value = 1.0;
         forcex_state = 1;
+        forcex_mark();
 
         /* Other settings frozen until GUI recovers */
         forced_xmin = p[MIN_GUI_PARAM].value;
@@ -602,6 +632,7 @@ int transform_acq_params(rp_app_params_t *p)
     if (reset_zoom == 1) {
         p[FORCEX_FLAG_PARAM].value  = 1.0;
         forcex_state = 1;
+        forcex_mark();
 
         forced_xmin = 0.0;
         forced_xmax = 130.0;
@@ -682,6 +713,7 @@ int rp_set_params(rp_app_params_t *p, int len)
     int awg_params_change = 0;
     int pid_params_change = 0;
     int dummy_params_change = 0;
+    int got_xmin = 0, got_xmax = 0;
 
 
     TRACE("%s()\n", __FUNCTION__);
@@ -720,8 +752,25 @@ int rp_set_params(rp_app_params_t *p, int len)
         if(rp_main_params[p_idx].read_only)
             continue;
 
-        if(rp_main_params[p_idx].value != p[i].value) {
+        if(p_idx == MIN_GUI_PARAM) got_xmin = 1;
+        if(p_idx == MAX_GUI_PARAM) got_xmax = 1;
+
+        /* xmin/xmax are compared with the last GUI values (GUI_XMIN/GUI_XMAX, GUI units): after a change
+         * MIN/MAX_GUI_PARAM hold the worker window in seconds, so the xmin/xmax that the page sends in every
+         * POST always looked changed, and every POST (any parameter, e.g. a dummy control) re-armed the scope:
+         * a Normal/Single acquisition waiting for its trigger was disarmed (from rp_lock-in_pid_h v2.3.14) */
+        float cmp_val = rp_main_params[p_idx].value;
+        if(params_init && (p_idx == MIN_GUI_PARAM))
+            cmp_val = rp_main_params[GUI_XMIN].value;
+        if(params_init && (p_idx == MAX_GUI_PARAM))
+            cmp_val = rp_main_params[GUI_XMAX].value;
+
+        if(cmp_val != p[i].value) {
             if(p_idx < PARAMS_AWG_PARAMS)
+                params_change = 1;
+            /* dummy params that the scope worker uses (inputs of the channels, raw / R-phase display) */
+            if((p_idx == DUMMY_OSCA_SW) || (p_idx == DUMMY_OSCB_SW) ||
+               (p_idx == DUMMY_OSC_RAW_MODE) || (p_idx == DUMMY_OSC_LOCKIN_MODE))
                 params_change = 1;
             if ( (p_idx >= PARAMS_AWG_PARAMS) && (p_idx < PARAMS_PID_PARAMS) )
                 awg_params_change = 1;
@@ -752,7 +801,13 @@ int rp_set_params(rp_app_params_t *p, int len)
 
         pthread_mutex_lock(&rp_main_params_mutex);
         /* Xmin & Xmax public copy to be served to clients */
-        /* p may be a partial list (split POSTs): use the values already copied by name in the loop above */
+        /* p may be a partial list (split POSTs): use the values already copied by name in the loop above.
+         * xmin/xmax not in this POST: the MIN/MAX_GUI_PARAM slots hold the worker window in seconds (see
+         * "write back" below), not GUI units: use the last GUI values (GUI_XMIN/GUI_XMAX) instead */
+        if(!got_xmin)
+            rp_main_params[MIN_GUI_PARAM].value = rp_main_params[GUI_XMIN].value;
+        if(!got_xmax)
+            rp_main_params[MAX_GUI_PARAM].value = rp_main_params[GUI_XMAX].value;
         rp_main_params[GUI_XMIN].value = rp_main_params[MIN_GUI_PARAM].value;
         rp_main_params[GUI_XMAX].value = rp_main_params[MAX_GUI_PARAM].value;
         transform_acq_params(rp_main_params);
@@ -794,8 +849,9 @@ int rp_set_params(rp_app_params_t *p, int len)
             rp_osc_worker_change_state(rp_osc_auto_set_state);
             /* AUTO_FLAG_PARAM is cleared when Auto-set algorithm finishes */
 
-            /* Wait for auto-set algorithm to finish or timeout */
-            int timeout = 10000000; // [us]
+            /* Wait for auto-set algorithm to finish or timeout (the auto-set itself gives up after its own
+             * time limits, ~10 s in the worst case: decimation 8k, forced acquisitions) */
+            int timeout = 15000000; // [us]
             const int step = 50000; // [us]
             rp_osc_worker_state_t state;
             while (timeout > 0) {
@@ -811,6 +867,8 @@ int rp_set_params(rp_app_params_t *p, int len)
 
             if (timeout <= 0) {
                 fprintf(stderr, "AUTO: Timeout waiting for AUTO-set algorithm to finish.\n");
+                /* do not leave auto_flag = 1: every later POST would start the auto-set again */
+                rp_auto_set_aborted();
             }
 
             auto_in_progress = 0;
@@ -831,7 +889,7 @@ int rp_set_params(rp_app_params_t *p, int len)
         if((time_range == 0) || (time_range == 1)) {
             time_unit     = 0;
             t_unit_factor = 1e6;
-        } else if((time_range == 2) || (time_range == 3)) {
+        } else if((time_range == 2) || (time_range == 3) || (time_range == 4) || (time_range == 5) || (time_range == 6)) {
             time_unit     = 1;
             t_unit_factor = 1e3;
         }
@@ -973,6 +1031,10 @@ int rp_get_params(rp_app_params_t **p)
         return -1;
 
     pthread_mutex_lock(&rp_main_params_mutex);
+    /* Registers of the dummy module (monitors, and values written from outside, e.g. by ssh) read on every
+     * request, not only when a complete capture arrives: with Normal waiting for its trigger or a long
+     * window the page kept showing old values */
+    dummy_update_main(&rp_main_params[0]);
     for(i = 0; i < PARAMS_NUM; i++) {
         int p_strlen = strlen(rp_main_params[i].name);
         p_copy[i].name = (char *)malloc(p_strlen+1);
@@ -1030,7 +1092,7 @@ int rp_get_signals(float ***s, int *sig_num, int *sig_len)
     //TRACE("LOLO(rp_get_signals): g_dummy_reg->read_ctrl: %d \n", (int)g_dummy_reg->read_ctrl ) ;
     //dummy_freeze_regs();
 
-    dummy_update_main(&rp_main_params[0]); // LOLO: update params from FPGA
+    /* The registers of the dummy module are read in rp_get_params() (every request, under the mutex) */
 
     //dummy_restore_regs();
 
@@ -1192,23 +1254,50 @@ int rp_clean_params(rp_app_params_t *params)
     return 0;
 }
 
+/* Scope parameters computed by the auto-set (from rp_lock-in_pid_h v2.3.14) */
+static const int auto_set_params[] = {
+    MIN_GUI_PARAM, MAX_GUI_PARAM, TRIG_MODE_PARAM, TRIG_SRC_PARAM, TRIG_DLY_PARAM, TRIG_LEVEL_PARAM,
+    TIME_RANGE_PARAM, TIME_UNIT_PARAM, AUTO_FLAG_PARAM, MIN_Y_PARAM, MAX_Y_PARAM, GUI_RST_Y_RANGE,
+    MIN_Y_NORM, MAX_Y_NORM
+};
+
+/* Called by the worker when the auto-set has finished: only the scope parameters it found go to the main
+ * parameters (before, the whole worker copy, which could be stale), which are then applied */
 int rp_update_main_params(rp_app_params_t *params)
 {
     TRACE("LOLO(rp_update_main_params): START\n");
-    int i = 0;
+    unsigned i;
     if(params == NULL)
         return -1;
 
     pthread_mutex_lock(&rp_main_params_mutex);
-    while(params[i].name != NULL) {
-        rp_main_params[i].value = params[i].value;
-        i++;
-    }
+    for(i = 0; i < sizeof(auto_set_params) / sizeof(auto_set_params[0]); i++)
+        rp_main_params[auto_set_params[i]].value = params[auto_set_params[i]].value;
+    rp_main_params[AUTO_FLAG_PARAM].value = 0;   /* never start another auto-set from the worker thread */
     pthread_mutex_unlock(&rp_main_params_mutex);
     params_init = 0;
     rp_set_params(&rp_main_params[0], PARAMS_NUM);
 
     return 0;
+}
+
+/* The auto-set was aborted by a change of the worker state (another POST, quit): nothing is copied back,
+ * only auto_flag is cleared, so that the next POST does not start an AUTO the user did not ask for */
+void rp_auto_set_aborted(void)
+{
+    pthread_mutex_lock(&rp_main_params_mutex);
+    rp_main_params[AUTO_FLAG_PARAM].value = 0;
+    pthread_mutex_unlock(&rp_main_params_mutex);
+}
+
+/* The auto-set failed (no acquisition / trigger in time): auto_flag cleared and the current parameters
+ * applied again (the worker goes back to the trigger mode of the page). Called from the worker thread:
+ * auto_flag is 0, so rp_set_params() does not wait for the worker. */
+void rp_auto_set_failed(void)
+{
+    rp_auto_set_aborted();
+    params_init = 0;
+    rp_set_params(&rp_main_params[0], PARAMS_NUM);
 }
 
 int rp_update_meas_data(rp_osc_meas_res_t ch1_meas, rp_osc_meas_res_t ch2_meas)

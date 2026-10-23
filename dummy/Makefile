@@ -20,11 +20,19 @@ CONTROLLER_DBG = controllerhf_dbg.so
 CONTROLLER_RLD = controllerhf_rld.so
 
 
-# Ecosystem 2.0: the FPGA is loaded from fpga.bit.bin by fpga.sh (fpgautil). bootgen (Vivado 2020.1)
-# converts fpga.bit (a copy of red_pitaya.bit, synthesized with Vivado 2015.2) into fpga.bit.bin.
-# Ecosystem 0.9x/1.0 load red_pitaya.bit (fpga.conf). Both files go in the packages.
-FPGA_BIN         = fpga.bit.bin
-BOOTGEN_SETTINGS ?= /tools/Xilinx/Vivado/2020.1/settings64.sh
+# FPGA: Vivado 2020.1, RedPitaya-FPGA structure (fpga/, project v0.94, model Z10), as in the lock-in Apps.
+# fpga/Makefile loads Vivado 2020.1 by itself in a clean environment, so it does not mix with the Vivado
+# 2015.2 + Linaro environment of ../settings.sh used for C. It produces red_pitaya.bit and, with bootgen,
+# fpga.bit.bin (Ecosystem 2.0: loaded with fpgautil by fpga.sh).
+# Ecosystem 0.9x/1.0 load the file of fpga.conf (red_pitaya.bit). Optional: "make eco1" synthesizes the
+# Vivado 2015.2 design of fpga_eco1/ (the 0.9x scope; same dummy.v) into red_pitaya_eco1.bit, which then
+# goes in the packages as red_pitaya.bit (the 2020.1 one otherwise).
+FPGA_BIN  = fpga.bit.bin
+FPGA_PRJ ?= v0.94
+FPGA_OUT  = fpga/prj/$(FPGA_PRJ)/out
+ECO1_BIT  = red_pitaya_eco1.bit
+# bitstream of the packages for Ecosystem 0.9x/1.0 (fpga.conf)
+PKG_BIT   = $(if $(wildcard $(ECO1_BIT)),$(ECO1_BIT),red_pitaya.bit)
 
 
 CFLAGS += -DVERSION=$(VER)-$(BUILD_NUMBER) -DREVISION=$(REVISION)
@@ -33,7 +41,7 @@ export CFLAGS
 
 # fpga/app are PHONY: with fpga.sh present, make's implicit rule '%: %.sh' would
 # otherwise turn the target 'fpga' (a directory) into 'cat fpga.sh > fpga'
-.PHONY: clean clean_fpga clean_app clean_target app fpga zip tar
+.PHONY: clean clean_fpga clean_app clean_target app fpga eco1 clean_eco1 zip tar
 
 all: $(CONTROLLERHF) fpga
 
@@ -54,24 +62,35 @@ app: $(CONTROLLERHF)
 fpga: red_pitaya.bit fpga.bit $(FPGA_BIN)
 
 red_pitaya.bit:
-	cd fpga && $(MAKE) out/red_pitaya.bit
-	cp fpga/out/red_pitaya.bit .
+	$(MAKE) -C fpga all PRJ=$(FPGA_PRJ)
+	cp $(FPGA_OUT)/red_pitaya.bit .
 
 fpga.bit: red_pitaya.bit
 	cp red_pitaya.bit ./fpga.bit
 
-# .bit -> .bin for Ecosystem 2.0 (bash: make runs /bin/sh, which has no 'source')
-$(FPGA_BIN): fpga.bit
-	@test -f "$(BOOTGEN_SETTINGS)" || { echo "ERROR: Vivado 2020.1 (bootgen) not found: $(BOOTGEN_SETTINGS) (set BOOTGEN_SETTINGS=...)"; exit 1; }
-	printf "all:{ fpga.bit }\n" > fpga.bif
-	bash -c '. $(BOOTGEN_SETTINGS) > /dev/null && bootgen -image fpga.bif -arch zynq -process_bitstream bin -w on'
+# .bit -> .bin for Ecosystem 2.0: made by fpga/Makefile (bootgen of Vivado 2020.1)
+$(FPGA_BIN): red_pitaya.bit
+	$(MAKE) -C fpga bin PRJ=$(FPGA_PRJ)
+	cp $(FPGA_OUT)/fpga.bit.bin $(FPGA_BIN)
+
+# Optional: Vivado 2015.2 bitstream for Ecosystem 0.9x/1.0 (needs the environment of ../settings.sh)
+eco1: $(ECO1_BIT)
+
+$(ECO1_BIT):
+	cd fpga_eco1 && $(MAKE) out/red_pitaya.bit
+	cp fpga_eco1/out/red_pitaya.bit $(ECO1_BIT)
+
+clean_eco1:
+	$(MAKE) -C fpga_eco1 clean
+	-$(RM) -f $(ECO1_BIT)
 
 # Files of the App on the board (the controller is renamed to controllerhf.so in each package)
 APP_FILES = fpga.conf info py css js index.html nginx.conf
 
 target/$(APP): red_pitaya.bit $(FPGA_BIN) $(CONTROLLERHF) index.html
 	mkdir -p target/$(APP)
-	cp -r $(CONTROLLERHF) $(APP_FILES) fpga.sh $(FPGA_BIN) red_pitaya.bit target/$(APP)
+	cp -r $(CONTROLLERHF) $(APP_FILES) fpga.sh $(FPGA_BIN) target/$(APP)
+	cp $(PKG_BIT) target/$(APP)/red_pitaya.bit   # Ecosystem 0.9x/1.0 (fpga.conf)
 	chmod 755 target/$(APP)/fpga.sh  # 2.0 runs it with system(): needs the exec bit
 	rm target/$(APP)/info/icon_*.png
 	cp -r upload_app.sh target/
@@ -84,7 +103,8 @@ target/$(APP): red_pitaya.bit $(FPGA_BIN) $(CONTROLLERHF) index.html
 
 target_dbg/$(APP)_DEBUG: red_pitaya.bit $(FPGA_BIN) $(CONTROLLER_DBG) index.html
 	mkdir -p target_dbg/$(APP)_DEBUG
-	cp -r $(CONTROLLER_DBG) $(APP_FILES) fpga.sh $(FPGA_BIN) red_pitaya.bit target_dbg/$(APP)_DEBUG
+	cp -r $(CONTROLLER_DBG) $(APP_FILES) fpga.sh $(FPGA_BIN) target_dbg/$(APP)_DEBUG
+	cp $(PKG_BIT) target_dbg/$(APP)_DEBUG/red_pitaya.bit
 	chmod 755 target_dbg/$(APP)_DEBUG/fpga.sh
 	cat target_dbg/$(APP)_DEBUG/info/icon_DEBUG.png > target_dbg/$(APP)_DEBUG/info/icon.png
 	rm  target_dbg/$(APP)_DEBUG/info/icon_*.png
@@ -156,13 +176,14 @@ clean_app:
 	echo "BUILD_NUMBER=$$(( $(BUILD_NUMBER) + 1 ))" > ../_build_number
 
 clean_fpga:
-	$(MAKE) -C fpga clean
+	$(MAKE) -C fpga clean PRJ=$(FPGA_PRJ)
 	-$(RM) target -rf
 	-$(RM) target_dbg -rf
 	-$(RM) target_rld -rf
 	-$(RM) -f red_pitaya.bit fpga.bit fpga.bif $(FPGA_BIN)
 	echo "BUILD_NUMBER=$$(( $(BUILD_NUMBER) + 1 ))" > ../_build_number
 
+# (the optional Vivado 2015.2 bitstream is removed with make clean_eco1)
 clean: clean_app clean_fpga clean_target
 
 
@@ -183,7 +204,8 @@ check_rpip:
 # FPGA images only (red_pitaya.bit for 0.9x/1.0 and fpga.bit.bin for 2.0)
 upload_bit: check_rpip red_pitaya.bit $(FPGA_BIN)
 	ssh $(RPIP) $(RPOPTS) "$(RP_RW) ; rm -f /opt/redpitaya/www/apps/$(APP)/red_pitaya.bit /opt/redpitaya/www/apps/$(APP)/$(FPGA_BIN)"
-	scp $(RPSCP) red_pitaya.bit $(FPGA_BIN) root@$(RPIP):/opt/redpitaya/www/apps/$(APP)/
+	scp $(RPSCP) $(FPGA_BIN) root@$(RPIP):/opt/redpitaya/www/apps/$(APP)/
+	scp $(RPSCP) $(PKG_BIT) root@$(RPIP):/opt/redpitaya/www/apps/$(APP)/red_pitaya.bit
 
 upload: check_rpip target/$(APP)
 	ssh $(RPIP) $(RPOPTS) "$(RP_RW) ; rm -rf /opt/redpitaya/www/apps/$(APP) ; mkdir -p /opt/redpitaya/www/apps/$(APP)"

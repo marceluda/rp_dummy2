@@ -27,7 +27,7 @@ N0 y N1 son parámetros fijados en tiempo de compilación y no cambian una ves i
 */
 
 
-module debounce #(parameter N0=7 , N1=4)
+module dummy_debounce #(parameter N0=7 , N1=4)
    (
     input wire clk, reset,
     input wire in,
@@ -127,6 +127,6 @@ endmodule
 /* 
 Instantiation example:
 
-debounce #(.N0(7) , N1(4)) i_debounce_NAME ( .clk(clk), .reset(rst), .in(IN), .db_level(OUT), .db_tick (OUT_TICK)  );
+dummy_debounce #(.N0(7) , N1(4)) i_debounce_NAME ( .clk(clk), .reset(rst), .in(IN), .db_level(OUT), .db_tick (OUT_TICK)  );
 
 */

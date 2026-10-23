@@ -10,6 +10,8 @@
 ################################################################################
 
 set path_rtl rtl
+# User RTL of the App (dummy.v and dummy/), shared with the Vivado 2020.1 design of ../fpga
+set path_dummy ../fpga/prj/v0.94/rtl
 set path_ip  ip
 set path_sdc sdc
 
@@ -76,32 +78,32 @@ read_verilog                      $path_rtl/red_pitaya_scope.v
 read_verilog                      $path_rtl/red_pitaya_top.v
 
 
-read_verilog                      $path_rtl/dummy.v
+read_verilog                      $path_dummy/dummy.v
 
 # Automatically added dummy modules
 
-read_verilog                      $path_rtl/dummy/UniversalCounter.v
-read_verilog                      $path_rtl/dummy/aDACdecoder.v
-read_verilog                      $path_rtl/dummy/debounce.v
-read_verilog                      $path_rtl/dummy/filtro_pasaaltos.v
-read_verilog                      $path_rtl/dummy/filtro_pasabajos.v
-read_verilog                      $path_rtl/dummy/fun_icdf.v
-read_verilog                      $path_rtl/dummy/fun_pico.v
-read_verilog                      $path_rtl/dummy/gen_mod.v
-read_verilog                      $path_rtl/dummy/gen_ramp.v
-read_verilog                      $path_rtl/dummy/mult_dsp_14.v
-read_verilog                      $path_rtl/dummy/muxer3.v
-read_verilog                      $path_rtl/dummy/muxer4.v
-read_verilog                      $path_rtl/dummy/muxer5.v
-read_verilog                      $path_rtl/dummy/muxer_reg3.v
-read_verilog                      $path_rtl/dummy/muxer_reg4.v
-read_verilog                      $path_rtl/dummy/muxer_reg5.v
-read_verilog                      $path_rtl/dummy/pipe_mult.v
-read_verilog                      $path_rtl/dummy/rand_gen_uni.v
-read_verilog                      $path_rtl/dummy/satprotect.v
-read_verilog                      $path_rtl/dummy/signo.v
-read_verilog                      $path_rtl/dummy/sum_2N.v
-read_verilog                      $path_rtl/dummy/trigger_input.v
+read_verilog                      $path_dummy/dummy/UniversalCounter.v
+read_verilog                      $path_dummy/dummy/aDACdecoder.v
+read_verilog                      $path_dummy/dummy/dummy_debounce.v
+read_verilog                      $path_dummy/dummy/filtro_pasaaltos.v
+read_verilog                      $path_dummy/dummy/filtro_pasabajos.v
+read_verilog                      $path_dummy/dummy/fun_icdf.v
+read_verilog                      $path_dummy/dummy/fun_pico.v
+read_verilog                      $path_dummy/dummy/gen_mod.v
+read_verilog                      $path_dummy/dummy/gen_ramp.v
+read_verilog                      $path_dummy/dummy/mult_dsp_14.v
+read_verilog                      $path_dummy/dummy/muxer3.v
+read_verilog                      $path_dummy/dummy/muxer4.v
+read_verilog                      $path_dummy/dummy/muxer5.v
+read_verilog                      $path_dummy/dummy/muxer_reg3.v
+read_verilog                      $path_dummy/dummy/muxer_reg4.v
+read_verilog                      $path_dummy/dummy/muxer_reg5.v
+read_verilog                      $path_dummy/dummy/pipe_mult.v
+read_verilog                      $path_dummy/dummy/rand_gen_uni.v
+read_verilog                      $path_dummy/dummy/satprotect.v
+read_verilog                      $path_dummy/dummy/signo.v
+read_verilog                      $path_dummy/dummy/sum_2N.v
+read_verilog                      $path_dummy/dummy/trigger_input.v
 
 
 # End of automatic part
@@ -109,7 +111,7 @@ read_verilog                      $path_rtl/dummy/trigger_input.v
 
 
 
-# read_verilog                      $path_rtl/dummy.v
+# read_verilog                      $path_dummy/dummy.v
 
 
 

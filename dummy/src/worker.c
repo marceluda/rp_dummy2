@@ -132,6 +132,13 @@ int rp_osc_worker_change_state(rp_osc_worker_state_t new_state)
     if(new_state >= rp_osc_nonexisting_state)
         return -1;
     pthread_mutex_lock(&rp_osc_ctrl_mutex);
+    /* Once the worker was asked to quit (rp_osc_worker_exit()), no other state may replace it: a POST or
+     * the end of an auto-set in progress would otherwise keep the thread alive and pthread_join() (and so
+     * rp_app_exit(), and nginx) would wait forever */
+    if((rp_osc_ctrl == rp_osc_quit_state) && (new_state != rp_osc_quit_state)) {
+        pthread_mutex_unlock(&rp_osc_ctrl_mutex);
+        return -1;
+    }
     rp_osc_ctrl = new_state;
     pthread_mutex_unlock(&rp_osc_ctrl_mutex);
     return 0;
@@ -223,6 +230,41 @@ int rp_osc_set_meas_data(rp_osc_meas_res_t ch1_meas, rp_osc_meas_res_t ch2_meas)
 
 
 /*----------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------*/
+/* Parameters that define an acquisition (FPGA settings of the scope, window, conversions of the trace).
+ * New parameters with all of them unchanged (e.g. a POST that only changes a control of the dummy module)
+ * do not abort the acquisition in progress: a Normal / Single acquisition keeps waiting for its trigger
+ * (from rp_lock-in_pid_h v2.3.23). Before, every POST re-armed the scope, and a trigger caused by a change
+ * made from the web page (e.g. Number A as scope input) was never captured. */
+static const int rp_osc_acq_keys[] = {
+    MIN_GUI_PARAM, MAX_GUI_PARAM, TRIG_MODE_PARAM, TRIG_SRC_PARAM, TRIG_EDGE_PARAM, TRIG_DLY_PARAM,
+    TRIG_LEVEL_PARAM, TIME_RANGE_PARAM, TIME_UNIT_PARAM, EN_AVG_AT_DEC, PRB_ATT_CH1, GAIN_CH1, PRB_ATT_CH2,
+    GAIN_CH2, GEN_DC_OFFS_1, GEN_DC_OFFS_2, DUMMY_OSCA_SW, DUMMY_OSCB_SW, DUMMY_OSC_RAW_MODE, DUMMY_OSC_LOCKIN_MODE,
+    -1 };
+
+static int rp_osc_acq_params_same(const rp_app_params_t *a, const rp_app_params_t *b)
+{
+    int i;
+    if(!a || !b)
+        return 0;
+    for(i = 0; rp_osc_acq_keys[i] >= 0; i++)
+        if(a[rp_osc_acq_keys[i]].value != b[rp_osc_acq_keys[i]].value)
+            return 0;
+    return 1;
+}
+
+/* Called with rp_osc_ctrl_mutex locked while an acquisition is in progress: if the new parameters do not
+ * change the acquisition, take them (curr_params) and clear the 'dirty' flag. Returns the flag left. */
+static int rp_osc_absorb_params(rp_app_params_t **curr_params)
+{
+    if(rp_osc_params_dirty && rp_osc_acq_params_same(rp_osc_params, *curr_params)) {
+        rp_copy_params(rp_osc_params, curr_params);
+        rp_osc_params_dirty = 0;
+    }
+    return rp_osc_params_dirty;
+}
+
+
 void *rp_osc_worker_thread(void *args)
 {
     rp_osc_worker_state_t old_state, state;
@@ -293,7 +335,7 @@ void *rp_osc_worker_thread(void *args)
 
         if(state == rp_osc_auto_set_state) {
             /* Auto-set algorithm was selected - run it */
-            rp_osc_auto_set(curr_params, ch1_max_adc_v, ch2_max_adc_v,
+            int auto_ret = rp_osc_auto_set(curr_params, ch1_max_adc_v, ch2_max_adc_v,
                             curr_params[GEN_DC_OFFS_1].value,
                             curr_params[GEN_DC_OFFS_2].value,
                             curr_params[PRB_ATT_CH1].value,
@@ -301,8 +343,24 @@ void *rp_osc_worker_thread(void *args)
                             curr_params[GAIN_CH1].value,
                             curr_params[GAIN_CH2].value,
                             curr_params[EN_AVG_AT_DEC].value);
-            /* Return calculated parameters to main module */
-            rp_update_main_params(curr_params);
+            if(auto_ret == 0) {
+                /* Return calculated parameters to main module (only the auto-set ones, see main.c) */
+                rp_update_main_params(curr_params);
+            } else if(auto_ret == RP_OSC_AUTO_ABORTED) {
+                /* Another state (or quit) or new parameters: with the auto-set state still set and new
+                 * parameters the loop runs it again with them; otherwise only auto_flag is cleared */
+                rp_osc_worker_state_t st;
+                rp_osc_worker_get_state(&st);
+                if(st != rp_osc_auto_set_state)
+                    rp_auto_set_aborted();
+            } else {
+                /* Failed (no trigger in time, ...): auto_flag cleared and the current parameters applied
+                 * again, so the scope goes back to its mode instead of looping in the auto-set */
+                fprintf(stderr, "AUTO: auto-set failed, scope settings unchanged\n");
+                rp_auto_set_failed();
+            }
+            /* the auto-set left the FPGA with its own settings */
+            fpga_update = 1;
             continue;
         }
 
@@ -396,7 +454,7 @@ void *rp_osc_worker_thread(void *args)
                 */
                 usleep(round(-1 * time_delay * 1e6));
             } else {
-                if(curr_params[TIME_RANGE_PARAM].value > 4)
+                if(curr_params[TIME_RANGE_PARAM].value > 6)   /* decimation >= 8k */
                     usleep(5000);
                 else
                     usleep(1);
@@ -421,7 +479,7 @@ void *rp_osc_worker_thread(void *args)
             while(1) {
                 pthread_mutex_lock(&rp_osc_ctrl_mutex);
                 state = rp_osc_ctrl;
-                params_dirty = rp_osc_params_dirty;
+                params_dirty = rp_osc_absorb_params(&curr_params);
                 pthread_mutex_unlock(&rp_osc_ctrl_mutex);
                 /* change in state, abort polling */
                 if((state != old_state) || params_dirty) {
@@ -498,7 +556,7 @@ void *rp_osc_worker_thread(void *args)
 
         pthread_mutex_lock(&rp_osc_ctrl_mutex);
         state = rp_osc_ctrl;
-        params_dirty = rp_osc_params_dirty;
+        params_dirty = rp_osc_absorb_params(&curr_params);
         pthread_mutex_unlock(&rp_osc_ctrl_mutex);
 
         if((state != old_state) || params_dirty)
@@ -839,6 +897,41 @@ int rp_osc_get_time_unit_factor(int time_unit)
 
 
 /*----------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------*/
+/* Auto-set: time limit to wait for one acquisition in time range 'range' [us]: three times the length of
+ * the buffer (16384 samples) plus 100 ms, at least 0.2 s (decimation 8k: 3.3 s) */
+static long long rp_osc_auto_acq_timeout_us(int range)
+{
+    int dec = osc_fpga_cnv_time_range_to_dec(range);
+    long long t = (long long)(3.0 * OSC_FPGA_SIG_LEN * (dec > 0 ? dec : 1) * c_osc_fpga_smpl_period * 1e6) + 100000;
+    return (t < 200000) ? 200000 : t;
+}
+
+/* Auto-set: waits for the end of the acquisition (osc_fpga_triggered()).
+ * Returns 0 when it is done, 1 on timeout, -1 if the state of the worker changed (another POST, quit) or new
+ * parameters came. Never waits more than timeout_us, so a stop of the App is always seen. */
+static int rp_osc_auto_wait(rp_osc_worker_state_t old_state, long long timeout_us)
+{
+    const int step = 500; /* [us] */
+    rp_osc_worker_state_t state;
+    int params_dirty;
+    while(1) {
+        pthread_mutex_lock(&rp_osc_ctrl_mutex);
+        state = rp_osc_ctrl;
+        params_dirty = rp_osc_params_dirty;
+        pthread_mutex_unlock(&rp_osc_ctrl_mutex);
+        if((state != old_state) || params_dirty)
+            return -1;
+        if(osc_fpga_triggered())
+            return 0;
+        if(timeout_us <= 0)
+            return 1;
+        usleep(step);
+        timeout_us -= step;
+    }
+}
+
+
 int rp_osc_auto_set(rp_app_params_t *orig_params,
                     float ch1_max_adc_v, float ch2_max_adc_v,
                     float ch1_user_dc_off, float ch2_user_dc_off,
@@ -846,7 +939,6 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
 {
     const int c_noise_thr = 500; /* noise threshold */
     rp_osc_worker_state_t old_state, state;
-    int params_dirty;
     /* Min/maxes from both channel */
     int max_cha = INT_MIN;
     int max_chb = INT_MIN;
@@ -888,27 +980,24 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
         osc_fpga_set_trigger(1);
 
         TRACE("WORKER LOLO wait for trigger, iter: %d\n", iter);
-        /* Wait for trigger to finish */
-        while(1) {
-            pthread_mutex_lock(&rp_osc_ctrl_mutex);
-            state = rp_osc_ctrl;
-            params_dirty = rp_osc_params_dirty;
-            pthread_mutex_unlock(&rp_osc_ctrl_mutex);
-            /* change in state, abort polling */
-            if((state != old_state) || params_dirty) {
-                return -1;
+        /* Wait for the (immediate) trigger and the end of the acquisition */
+        {
+            int w = rp_osc_auto_wait(old_state, rp_osc_auto_acq_timeout_us(time_range));
+            if(w < 0)
+                return RP_OSC_AUTO_ABORTED;
+            if(w > 0) {
+                fprintf(stderr, "AUTO: no acquisition with the immediate trigger (range %d)\n", time_range);
+                return RP_OSC_AUTO_FAILED;
             }
-            if(osc_fpga_triggered()) {
-                break;
-            }
-            usleep(500);
         }
         TRACE("WORKER LOLO wait for trigger endded, iter: %d\n", iter);
 
         /* Get the signals - available at rp_fpga_chX_signal vectors */
         for(smpl_cnt = 0; smpl_cnt < OSC_FPGA_SIG_LEN; smpl_cnt++) {
-            int cha_smpl = rp_fpga_cha_signal[smpl_cnt];
-            int chb_smpl = rp_fpga_chb_signal[smpl_cnt];
+            /* keep the 14 ADC bits: the 2.0 scope returns the samples sign-extended to 16 bits (a negative
+             * sample decoded without the mask gave ~-49000 and a trigger level saturated at -8192) */
+            int cha_smpl = rp_fpga_cha_signal[smpl_cnt] & ((1<<c_osc_fpga_adc_bits)-1);
+            int chb_smpl = rp_fpga_chb_signal[smpl_cnt] & ((1<<c_osc_fpga_adc_bits)-1);
 
             // TWO'S COMPLEMENT
             // LOLO
@@ -959,11 +1048,11 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
             //break;
         }
 
-        /* Still searching? - Increase time range up to 130 ms (D = 1024). */
+        /* Still searching? - Increase time range up to 130 ms (D = 1024, time range 6 since the 2.0 scope). */
         if ((iter % 3) == 2) {
             time_range++;
-            if (time_range > 3) {
-                time_range = 3;
+            if (time_range > 6) {
+                time_range = 6;
             }
         }
     }
@@ -1061,7 +1150,8 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
         TRACE("WORKER LOLO trig_level_v: %f\n", trig_level_v);
 
         /* Loop over time ranges and search for the best suiting one (Last range removed: too slow) */
-        for(time_range = 0; time_range < 5; time_range++) {
+        /* time ranges 0..7 = decimation 1 .. 8k (10 ranges since the 2.0 scope, see osc_fpga_cnv_time_range_to_dec()) */
+        for(time_range = 0; time_range <= 7; time_range++) {
             float period = 0;
             int trig_source = osc_fpga_cnv_trig_source(0, trig_src_ch, 0);
             int *sig_data;
@@ -1080,22 +1170,24 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
             osc_fpga_arm_trigger();
             osc_fpga_set_trigger(trig_source);
             TRACE("WORKER LOLO wait for another tirgegr: %d\n", 1);
-            /* Wait for trigger */
-            /* Wait for trigger to finish */
-            while(1) {
-                pthread_mutex_lock(&rp_osc_ctrl_mutex);
-                state = rp_osc_ctrl;
-                params_dirty = rp_osc_params_dirty;
-                pthread_mutex_unlock(&rp_osc_ctrl_mutex);
-
-                /* change in state, abort polling */
-                if((state != old_state) || params_dirty) {
-                    return -1;
+            /* Wait for the level trigger; if it does not come in time (e.g. a DC signal, or a level that the
+             * signal does not cross), force the acquisition with an immediate trigger: the period is then not
+             * found in this range and the next one is tried */
+            {
+                long long to = rp_osc_auto_acq_timeout_us(time_range);
+                int w = rp_osc_auto_wait(old_state, to);
+                if(w < 0)
+                    return RP_OSC_AUTO_ABORTED;
+                if(w > 0) {
+                    osc_fpga_set_trigger(1);   /* manual (immediate) trigger */
+                    w = rp_osc_auto_wait(old_state, to);
+                    if(w < 0)
+                        return RP_OSC_AUTO_ABORTED;
+                    if(w > 0) {
+                        fprintf(stderr, "AUTO: no acquisition in range %d\n", time_range);
+                        return RP_OSC_AUTO_FAILED;
+                    }
                 }
-                if(osc_fpga_triggered()) {
-                    break;
-                }
-                usleep(500);
             }
 
             TRACE("WORKER LOLO wait for another tirgegr finished: %d\n", 1);
@@ -1117,7 +1209,7 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
             TRACE("AUTO: period = %.6f\n", period);
 
             /* We have a winner - calculate the new parameters */
-            if ((period > 0) || (time_range >= 4))
+            if ((period > 0) || (time_range >= 7))
             {
                 int ave_y, amp_y;
                 int time_unit = 2;
@@ -1127,7 +1219,7 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
                 if((time_range == 0) || (time_range == 1)) {
                     time_unit     = 0;
                     t_unit_factor = 1e6;
-                } else if((time_range == 2) || (time_range == 3)) {
+                } else if((time_range >= 2) && (time_range <= 6)) {
                     time_unit     = 1;
                     t_unit_factor = 1e3;
                 }
@@ -1159,7 +1251,7 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
                     TRACE("AUTO: Signal period cannot be determined.\n");
                     /* Stretch to max 1/4 range. All slow signals should be still visible there */
                     orig_params[MAX_GUI_PARAM].value = 2.0;
-                    orig_params[TIME_RANGE_PARAM].value = 5;
+                    orig_params[TIME_RANGE_PARAM].value = 8;   /* decimation 64k (8.6 s) */
                 }
 
                 orig_params[TIME_UNIT_PARAM].value  = time_unit;
@@ -1193,7 +1285,7 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
             }
         }
     }
-    return -1;
+    return RP_OSC_AUTO_FAILED;
 }
 
 
@@ -1215,6 +1307,7 @@ int rp_osc_meas_clear(rp_osc_meas_res_t *ch_meas)
 inline int rp_osc_adc_sign(int in_data)
 {
     int s_data = in_data;
+    s_data &= ((1<<c_osc_fpga_adc_bits)-1);   /* 2.0 scope: 16-bit sign-extended samples */
     if(s_data & (1<<(c_osc_fpga_adc_bits-1)))
         s_data = -1 * ((s_data ^ ((1<<c_osc_fpga_adc_bits)-1)) + 1);
     return s_data;

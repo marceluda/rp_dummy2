@@ -17,7 +17,7 @@ ImageMagick is optional, for the icon labels):
 ./new_project.py -h                           # all the options
 ```
 
-Every control becomes a register of the FPGA module (`fpga/rtl/dummy.v`), a parameter of the C controller
+Every control becomes a register of the FPGA module (`fpga/prj/v0.94/rtl/dummy.v`), a parameter of the C controller
 and an element of the web page, already connected. The `.ini` is validated before anything is written
 (types, widths, names that clash with the template or with Verilog/C keywords...). The App is created as a
 standalone project folder (root `Makefile`, `settings.sh`, `_settings.env`, `resources/`) and keeps a copy
@@ -45,20 +45,21 @@ Inside the created folder you will find severla files and folders:
 css, js, index.html : files/folders related to Web GUI. You may need to edit index.html
                       to change controllers names or style.
 
-fpga                : Inside this folder are all the FPGA Verilog modules
+fpga                : FPGA design, Vivado 2020.1 (RedPitaya-FPGA structure, Ecosystem 2.0 scope)
+fpga_eco1           : optional FPGA design, Vivado 2015.2 (0.9x scope), for Ecosystem 0.9x/1.0
 info                : Just version information and app icon
 py                  : Python scripts for remote control
 src                 : C source code
 
 You may want to start editing the file:
 
-fpga/rtl/dummy.v
+fpga/prj/v0.94/rtl/dummy.v
 
 You have there wires for all the inputs/outputs and the memory registers.
 
 If you want to instantiate new modules, just paste them or create them in folder:
 
-fpga/rtl/dummy/
+fpga/prj/v0.94/rtl/dummy/
 
 And after that, run:
 
@@ -76,11 +77,15 @@ To compile the C components, run:
 make app
 ```
 
-To compile the FPGA circuit, run:
+To compile the FPGA circuit (Vivado 2020.1: `red_pitaya.bit` and `fpga.bit.bin`), run:
 
 ```
 make fpga
 ```
+
+Optional, for Ecosystem 0.9x/1.0: `make eco1` synthesizes the Vivado 2015.2 design of `fpga_eco1/` (same
+`dummy.v`) into `red_pitaya_eco1.bit`; when it exists it goes in the packages as `red_pitaya.bit` (the file
+those ecosystems load through `fpga.conf`). `make clean_eco1` removes it.
 
 If you have to re-compila one of this parts, first clean it:
 
@@ -104,9 +109,13 @@ LANG=C make
 
 ## Ecosystem 2.0
 
-The generated Apps run on Ecosystem 2.0 and on the older 0.9x/1.0. The FPGA is synthesized with Vivado 2015.2
-(`red_pitaya.bit`, loaded by 0.9x/1.0 through `fpga.conf`); `bootgen` of Vivado 2020.1 converts it into
-`fpga.bit.bin`, which Ecosystem 2.0 loads with `fpga.sh`. `nginx.conf` disables the cache of `index.html`.
+The generated Apps run on Ecosystem 2.0 and on the older 0.9x/1.0. The FPGA is synthesized with Vivado 2020.1
+from the RedPitaya-FPGA structure (Release_2026.1, as in the lock-in Apps) with the 2.0 oscilloscope (trigger
+lock, 20-bit decimation: windows up to ~68 s); `fpga/Makefile` loads Vivado 2020.1 by itself and converts the
+bitstream with `bootgen` into `fpga.bit.bin`, which Ecosystem 2.0 loads with `fpga.sh`. The same `red_pitaya.bit`
+(or the Vivado 2015.2 one of `make eco1`) goes in the packages for 0.9x/1.0 (`fpga.conf`). The controller works
+with both scopes; with the 0.9x scope (`make eco1`) the longest window is 8.6 s (17-bit decimation).
+`nginx.conf` disables the cache of `index.html`.
 The web page sends the parameters in chunks (Ecosystem 2.0 hangs with big POSTs), detects when another client
 takes the board, and restores its state after a restart.
 

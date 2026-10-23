@@ -83,6 +83,9 @@ int rp_osc_decimate_partial(float **cha_out_signal, int *cha_in_signal,
                             float ch1_user_dc_off, float ch2_user_dc_off);
 
 /* Auto-set algorithm */
+/* rp_osc_auto_set() return values (0: done, parameters in orig_params) */
+#define RP_OSC_AUTO_ABORTED  -1   /* state changed (another POST, quit) or new parameters */
+#define RP_OSC_AUTO_FAILED   -2   /* no acquisition / trigger in time */
 int rp_osc_auto_set(rp_app_params_t *orig_params, 
                     float ch1_max_adc_v, float ch2_max_adc_v,
                     float ch1_user_dc_off, float ch2_user_dc_off,

@@ -147,6 +147,8 @@ int dummy_restore_regs(){
  */
 int dummy_update_main(rp_app_params_t *params)
 {
+    if(g_dummy_reg == NULL)
+        return -1;
 
     //uint32_t  mask16 =   0b00000000000000000000000000001111 ;
 

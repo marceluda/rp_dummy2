@@ -6,15 +6,16 @@ config_tool.py: regenerates the automatic parts ("docks") of the App sources fro
 The registers of the dummy FPGA module are the fixed ones of the template (defined below) plus one per
 control of app.ini. From them this script writes:
 
-  -v  fpga/rtl/dummy.v         reg/wire declarations, bus write/read logic, list of the added registers
+  -v  fpga/prj/v0.94/rtl/dummy.v   reg/wire declarations, bus write/read logic, list of the added registers
   -m  src/*.c, src/*.h         C controller: register struct, parameters table, FPGA <-> parameters copy
   -w  index.html               panels of the controls and monitors, JS lists of controls, LOADPARAMS
   -p  py/hugo.py               register list for remote access from Python
-  -t  fpga/*.tcl               Verilog sources of fpga/rtl/dummy/ to synthesize
+  -t  fpga_eco1/*.tcl          Verilog sources of fpga/prj/v0.94/rtl/dummy/ for the Vivado 2015.2 design
+                               (the Vivado 2020.1 design of fpga/ takes every file of that folder)
   -a  all of them
 
 Run it again after editing app.ini (new controls, labels, widths...) or after adding .v files to
-fpga/rtl/dummy/. The user logic in dummy.v (outside the docks) is not touched.
+fpga/prj/v0.94/rtl/dummy/. The user logic in dummy.v (outside the docks) is not touched.
 
 Register map (app.ini [general] register_map):
   fixed  (default) template registers at 0x000-0x0FC, controls of app.ini from 0x100 in order
@@ -46,7 +47,7 @@ if __name__ == '__main__':
                 description='Regenerate the automatic parts of the App files (web page <--> C controller <--> '
                             'FPGA registers) from app.ini.')
     parser.add_argument("-v", "--do-verilog", dest='do_verilog', action="store_true",
-                        help="configure verilog files (fpga/rtl/dummy.v)")
+                        help="configure verilog files (fpga/prj/v0.94/rtl/dummy.v)")
     parser.add_argument("-m", "--do-main"   , dest='do_main'   , action="store_true",
                         help="configure C files (src/)")
     parser.add_argument("-w", "--do-html"   , dest='do_html'   , action="store_true",
@@ -54,7 +55,7 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--do-python" , dest='do_py'     , action="store_true",
                         help="configure python scripts (py/hugo.py)")
     parser.add_argument("-t", "--do-tcl"    , dest='do_tcl'    , action="store_true",
-                        help="configure TCL files (Verilog sources of fpga/rtl/dummy/)")
+                        help="configure TCL files of fpga_eco1/ (Verilog sources of fpga/prj/v0.94/rtl/dummy/)")
     parser.add_argument("-a", "--all"       , dest='do_all'    , action="store_true",
                         help="configure all the files")
 
@@ -148,7 +149,7 @@ for i in ['osc_ctrl','in1','in2','out1','out2']:
 if __name__ == '__main__' and args.do_verilog:
     print('do_verilog')
     f.update_verilog_files(folder)
-    update_verilog(os.path.join('fpga','rtl','dummy.v'), dock=['ADDED REGS'], txt=[added_regs_doc(f, cfg.controls)+'\n'])
+    update_verilog(DUMMY_V, dock=['ADDED REGS'], txt=[added_regs_doc(f, cfg.controls)+'\n'])
     print('\n')
 
 
@@ -248,7 +249,7 @@ for r in h:
     print('    '+r.name.ljust(25)+' is of type '+r.type)
 
 
-h.auto_set_controls('fpga/rtl/dummy.v','dummy')
+h.auto_set_controls(DUMMY_V,'dummy')
 
 
 h['dummy_osc1_filt_off'   ].control.text='Ch1'
@@ -325,17 +326,18 @@ if __name__ == '__main__' and args.do_tcl:
     tag = ( '# Automatically added dummy modules', '# End of automatic part')
     txt1 = '\n'
     txt2 = '\n'
-    for vfile in [ y.replace('fpga/rtl','$path_rtl') for y in sorted(glob('fpga/rtl/dummy/*.v')) ]:
+    # fpga_eco1/ (Vivado 2015.2, non-project): one line per file; path relative to fpga_eco1/ ($path_dummy)
+    for vfile in [ '$path_dummy/dummy/'+os.path.basename(y) for y in sorted(glob(os.path.join(DUMMY_RTL_DIR,'dummy','*.v'))) ]:
         txt1 += 'read_verilog'.ljust(34) + vfile + '\n'
         txt2 += 'add_files'.ljust(34) + vfile + '\n'
-    print('Writting file: fpga/red_pitaya_vivado.tcl')
+    print('Writting file: fpga_eco1/red_pitaya_vivado.tcl')
     update_file_match(
-        filename='fpga/red_pitaya_vivado.tcl',
+        filename='fpga_eco1/red_pitaya_vivado.tcl',
         tag=tag,
         txt=txt1)
-    print('Writting file: fpga/red_pitaya_vivado_project.tcl')
+    print('Writting file: fpga_eco1/red_pitaya_vivado_project.tcl')
     update_file_match(
-        filename='fpga/red_pitaya_vivado_project.tcl',
+        filename='fpga_eco1/red_pitaya_vivado_project.tcl',
         tag=tag,
         txt=txt2)
     print('\n')

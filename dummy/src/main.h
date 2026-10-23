@@ -206,6 +206,10 @@ int rp_clean_params(rp_app_params_t *params);
 * parameters are updated it also changed the worker state machine.
  */
 int rp_update_main_params(rp_app_params_t *params);
+/* auto-set aborted (another state / quit): clears auto_flag, copies nothing back */
+void rp_auto_set_aborted(void);
+/* auto-set failed (no trigger in time): clears auto_flag and applies the current parameters again */
+void rp_auto_set_failed(void);
 void get_scales(rp_app_params_t *p, float *scale1, float *scale2, float *maxv);
 void transform_to_iface_units(rp_app_params_t *p);
 void transform_from_iface_units(rp_app_params_t *p);
