@@ -20,7 +20,7 @@ Red Pitaya community applications, and it is the base of the lock-in Apps of the
 
 | | |
 |---|---|
-| Version | **1.0.1** (branch `devel2.0`, checkpoint CP6.1; `./new_project.py --version`). Generated Apps start at `0.1.0` and record the generator version. See [CHANGELOG.md](CHANGELOG.md) |
+| Version | **2.0.1** (branch `devel2.0`, tag `v2.0.1`; `./new_project.py --version`). Generated Apps start at `0.1.0` and record the generator version. See [CHANGELOG.md](CHANGELOG.md) |
 | Red Pitaya OS | **Ecosystem 2.0** (tested on RedPitaya_OS 2.04-35 with STEMlab 125-14) and the older 0.9x/1.0 (packages carry `red_pitaya.bit` + `fpga.conf`; optional Vivado 2015.2 bitstream with `make eco1`; builds, not yet tested on a 0.9x/1.0 board: [Devel.md](doc/Devel.md#ecosystem-09x10)) |
 | FPGA tools | Vivado 2020.1 (main design); Vivado 2015.2 only for `make eco1` |
 | C toolchain | Linaro `arm-linux-gnueabihf` 4.9 (2014.11 or 2015.02) |

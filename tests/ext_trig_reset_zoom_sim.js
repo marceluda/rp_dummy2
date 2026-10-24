@@ -201,7 +201,7 @@ function makeEnv(init, ls) {
            'onDropdownChange', 'config_storage_read', 'config_load_storage', 'resetZoom', 'resetZoomY', 'scopeSetXWindow',
            'timeUnitFactor', 'roundLevel', 'xAxisToUnits', 'display_update'].map(fnSrc).join('\n');
   code += '\n' + blockSrc('RESET ZOOM') + '\n';
-  code += '\n' + blockSrc('RAW TRIGGER') + '\n' + blockSrc('CONFIG KEYS') + '\n';   // units of the level, config keys (1.0.1)
+  code += '\n' + blockSrc('RAW TRIGGER') + '\n' + blockSrc('CONFIG KEYS') + '\n';   // units of the level, config keys (2.0.1)
   code += '\nvar scope_stop = false;\nfunction updateGraphData() { if(downloading || scope_stop) return; if(update_timer) { clearTimeout(update_timer); update_timer = null; }' +
           ' downloading = true; doGetData(); }\n';
   code += '\nthis.__get = function(e){return eval(e)};';

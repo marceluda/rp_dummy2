@@ -1,6 +1,6 @@
 # Remote: remote control of a generated App
 
-> Documented version: rp_dummy2 **1.0.1** (branch `devel2.0`, checkpoint CP6.1). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **2.0.1** (branch `devel2.0`, tag `v2.0.1`). Back to the [README](../README.md).
 > Related: [App.md](App.md) (register map), [Devel.md](Devel.md) (build, upload, safety notes).
 
 Every App made by `new_project.py` can be controlled without its web page, the same way as the lock-in Apps
@@ -36,9 +36,9 @@ Contents:
   Apps only when it starts. `./upload_app.sh -r rp-XXXXXX.local` does it ([Devel.md](Devel.md#upload_appsh)). Without
   it the endpoints answer 404.
 - **Opening the App resets the registers.** Every start loads the bitstream again: every register returns to its
-  reset value. The page writes its own parameters again when it connects, but the registers that are not parameters
-  of the page (the `stream_*` registers, see [§4](#4-streaming-of-the-scope)) keep their reset values until you write
-  them.
+  reset value. The page writes its own parameters again when it connects. The streaming settings `stream_ip`,
+  `stream_port` and `stream_rate` (not parameters of the page) are written back by the controller from
+  `/tmp/<App>_stream.conf` (since 2.0.1, see [§4](#4-streaming-of-the-scope)); `stream_cmd` always starts at 0.
 - Only single 32-bit accesses: the tools never burst-read the FPGA. Do the same in your own code
   ([Devel.md, safety notes](Devel.md#safety-notes)).
 
@@ -144,6 +144,19 @@ parameters of the page, so the page never overwrites them:
 | `stream_rate` | 128 | decimation of the scope while streaming: 125 MS/s / `stream_rate` |
 | `stream_cmd` | 0 | ≠ 0: streaming on |
 
+**Kept when the App is opened again** (since 2.0.1): the bitstream load resets the four registers, so the controller
+saves `stream_ip`, `stream_port` and `stream_rate` in `/tmp/<App>_stream.conf` whenever it sees them changed (on every
+request of the page) and when the App exits, and writes them back to the FPGA when the App is opened. The nginx log
+says `rp_app_init: streaming settings restored from /tmp/<App>_stream.conf: stream_ip=... stream_port=...
+stream_rate=...`. `stream_cmd` is never saved: opening the App never starts a streaming. Notes:
+
+- `/tmp` because the App folder (`/opt/redpitaya`) is mounted read-only on Ecosystem 2.0; the file is only written when
+  the values change. It does not survive a reboot of the board (by design: the address of the PC may change).
+- A file that is not valid (unknown or repeated key, value out of range, not a number) is ignored as a whole: the
+  registers keep their reset values (and the nginx log says so). Delete the file to go back to the reset values.
+- A change made while no page is open (only `/dummy` or `c/dummy`) is saved when the App exits (`bazaar?stop`,
+  opening another App); if the controller dies without exiting (crash, power off) such a change is lost.
+
 **Data:** a stream of little-endian 32-bit words, one per sample: CH1 in bits 13:0 and CH2 in bits 29:16, each a
 14-bit two's complement number (8192 counts = 1 V with the LV jumpers). Rates tested on a STEMlab 125-14 with
 OS 2.04-35: `stream_rate` 1024 → 122 kS/s and 128 → 976.6 kS/s (≈3.9 MB/s), without gaps; decimation 64 (1.95 MS/s)
@@ -175,19 +188,19 @@ It listens on the port, asks the board for the address of the PC (`/get_ip`), wr
 Then it sets `stream_cmd=0` (from a second thread, while it keeps reading: if nobody reads the socket during the
 HTTP request, the board waits in `send()` and its scope buffer is overwritten, `overrun`/`lost` in its log) and keeps
 receiving until the board closes the connection, so the last samples are not lost and the board ends cleanly (before
-1.0.1 it closed the socket first: "Broken pipe" in the log of the board). `--rcvbuf BYTES` sets the receive buffer of
+2.0.1 it closed the socket first: "Broken pipe" in the log of the board). `--rcvbuf BYTES` sets the receive buffer of
 the socket; by default Linux tunes it by itself (8 MiB only if `net.core.rmem_max` allows it). Ctrl-C does the same as
 the time limit (a second Ctrl-C ends at once, after one more short `stream_cmd=0` if the first was not confirmed; Ctrl-C before
 the data starts ends at once with exit status 130). If
 the board ends first, it also sets `stream_cmd=0`. Since it writes the registers on every run, the reset of the
-registers when the App is opened again does not matter.
+registers when the App is opened again does not matter (they are also restored by the controller, see above).
 
 ### By hand
 
 ```bash
 # PC: start the receiver first (it only listens)
 ./stream_receiver.py -p 6000 -o data.bin
-# board: registers (after every opening of the App!), start c/streaming, then switch on
+# board: registers (once: the controller restores them when the App is opened again), start c/streaming, then switch on
 curl "http://rp-XXXXXX.local/my_app/dummy?stream_ip=$(./stream_receiver.py --ip-int 192.168.1.20)&stream_port=6000&stream_rate=1024"
 curl "http://rp-XXXXXX.local/my_app/streaming"          # OK  (c/streaming waits for stream_cmd)
 curl "http://rp-XXXXXX.local/my_app/check_streaming"    # 0   (running)
@@ -255,7 +268,7 @@ decimation of `stream_rate`, bits 2–19 of `osc_ctrl_w`). See [Devel.md](Devel.
 
 ## 7. Pending (CP7, optional)
 
-Not in 1.0.0 (plan of the Ecosystem 2.0 migration, `reportes/dummy2/plan_eco20.md` of the Apps folder):
+Not in rp_dummy2 2.0.x (plan of the Ecosystem 2.0 migration, `reportes/dummy2/plan_eco20.md` of the Apps folder):
 
 - an acquisition tool with a trigger (`osc_dump` / `/run_dump` of the lock-in Apps): left out on purpose until it is
   versioned in `rp_lock-in_pid_h` (decision D6);

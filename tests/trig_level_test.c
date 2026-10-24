@@ -1,5 +1,5 @@
 /*
- * Host test of the Raw Mode trigger level conversion of dummy/src/fpga.c (rp_dummy2 1.0.1), linked with the real
+ * Host test of the Raw Mode trigger level conversion of dummy/src/fpga.c (rp_dummy2 2.0.1), linked with the real
  * fpga.c: osc_fpga_cnv_cnt_to_trig_v() must give the voltage that osc_fpga_cnv_v_to_cnt() (the function that writes
  * the threshold of the scope) turns into exactly the same counts, for every 14-bit level, calibration offset,
  * full scale and user offset. Before, the worker passed the counts as volts: 100 counts -> threshold 8191.

@@ -81,4 +81,5 @@ __pycache__/
 # Host-side tests (make -C tests)
 tests/auto_set_harness
 tests/trig_level_test
+tests/stream_conf_test
 tests/hdl_sim/

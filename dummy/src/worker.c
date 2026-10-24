@@ -256,7 +256,7 @@ static int rp_osc_acq_params_same(const rp_app_params_t *a, const rp_app_params_
 
 /* Trigger level for osc_fpga_update_params(), which converts volts to ADC counts with adc_max_v: the param
  * trig_level is in normalized volts, or in Raw Mode (dummy_osc_raw_mode) in raw ADC counts, as the page shows
- * them; then it is turned into the voltage that gives exactly those counts (rp_dummy2 1.0.1: before, the counts
+ * them; then it is turned into the voltage that gives exactly those counts (rp_dummy2 2.0.1: before, the counts
  * were taken as volts and the threshold saturated at +-8191) */
 float rp_osc_trig_level_v(rp_app_params_t *p, float adc_max_v)
 {

@@ -1,4 +1,4 @@
-// Testbench of library modules of dummy/fpga/prj/v0.94/rtl/dummy/ fixed in rp_dummy2 1.0.0 (make -C tests hdl,
+// Testbench of library modules of dummy/fpga/prj/v0.94/rtl/dummy/ fixed in rp_dummy2 2.0.0 (make -C tests hdl,
 // Vivado 2020.1 xsim): fun_icdf (|in| and output sign: before, negative inputs gave wrong values), fun_pico
 // (table lookup), gen_ramp (triangle between the limits, triggers, outB = outA * B / 4096 one tick later).
 // Prints "LIB ERRORS=<n>" and checks the ramp sequence.

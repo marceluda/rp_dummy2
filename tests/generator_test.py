@@ -304,6 +304,33 @@ class Generated(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('-C c all', r.stdout)
 
+    # -- 2.0.1: commented drivers of the monitors in dummy.v, -DVERSION once per gcc line, stream_conf in src/
+    def test_v201_monitor_hints_version_flags(self):
+        prj, out = self.gen('mon', '--no-icon')
+        app = os.path.join(prj, 'mon')
+        v = read(os.path.join(app, 'fpga', 'prj', 'v0.94', 'rtl', 'dummy.v'))
+        for name, bits in (('monitorA', 14), ('monitorB', 14), ('monitorC', 27), ('monitorD', 27)):
+            self.assertRegex(v, rf'\n    // assign {name} +?= 0 ;   // {bits} bits signed\n', name)
+            self.assertNotRegex(v, rf'\n\s*assign {name}\b', name)          # only commented
+        i_hint, i_conn = v.find('// assign monitorA'), v.find('NOW CONNECT CABLES AND MODULES')
+        self.assertTrue(0 < i_conn < i_hint, 'hint after the NOW CONNECT header')
+        self.assertLess(i_hint, v.find('// [BUS READ COPIES DOCK]'))
+        before = read(os.path.join(app, 'fpga', 'prj', 'v0.94', 'rtl', 'dummy.v'))
+        r = self.tool(app, '-a')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(read(os.path.join(app, 'fpga', 'prj', 'v0.94', 'rtl', 'dummy.v')), before)
+        self.assertNotIn('// assign monitor', read(os.path.join(TEMPLATE, 'fpga', 'prj', 'v0.94', 'rtl', 'dummy.v')))
+        # -DVERSION / -DREVISION only from the Makefile of the App (the project Makefile added them again)
+        r = run(['make', '-n', '-C', prj, 'all', 'BUILD_NUMBER=7'])
+        lines = [ln for ln in r.stdout.splitlines() if 'gcc' in ln and ' main.c' in ln]
+        self.assertTrue(lines, r.stdout[-2000:] + r.stderr)
+        for ln in lines:
+            self.assertEqual(ln.count('-DVERSION=0.1.0-7'), 1, ln)
+            self.assertEqual(ln.count('-DREVISION='), 1, ln)
+        # the streaming settings file module is built into the controller
+        self.assertTrue(os.path.isfile(os.path.join(app, 'src', 'stream_conf.c')))
+        self.assertIn('stream_conf.o', read(os.path.join(app, 'src', 'Makefile')))
+
     # -- config_tool.py tasks
     def test_config_tool_tasks(self):
         prj, out = self.gen('cfgt', '--no-icon')

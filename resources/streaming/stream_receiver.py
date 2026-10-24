@@ -13,9 +13,10 @@ With --board HOST --app APP (the App must be open in the board) it also does the
 HTTP endpoints of the App: it asks the board for the address of this PC (/<App>/get_ip), writes stream_ip,
 stream_port and stream_rate (/<App>/dummy), starts c/streaming (/<App>/streaming), sets stream_cmd = 1 and,
 at the end (time limit or Ctrl-C) stream_cmd = 0, and it keeps receiving until the board closes the connection
-(no sample is lost; also stream_cmd = 0 if the board ends first). The stream_* registers return to their
-reset values (0 / 6000 / 128 / 0) every time the App is opened (the FPGA is loaded again), so they must be
-written again after that: --board does it on every run.
+(no sample is lost; also stream_cmd = 0 if the board ends first). --board writes the registers on every run.
+Without it, write them once: loading the FPGA when the App is opened resets them (0 / 6000 / 128 / 0), but
+since rp_dummy2 2.0.1 the controller of the App writes stream_ip, stream_port and stream_rate back (from
+/tmp/<App>_stream.conf on the board); stream_cmd always starts at 0.
 
 Board side by hand (see the README of the App):
     curl "http://rp-XXXXXX.local/<App>/dummy?stream_ip=<IP as integer>&stream_port=6000&stream_rate=128"

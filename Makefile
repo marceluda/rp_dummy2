@@ -13,15 +13,15 @@ APP=dummy
 
 # Versioning system
 REVISION ?= devbuild
-VER:=$(shell cat $(APP)/info/info.json | grep version | sed -e 's/.*:\ *\"//' | sed -e 's/-.*//')
 
 INSTALL_DIR ?= .
 
 folder=$(CURDIR:%/=%)
 
 
-CFLAGS += -DVERSION=$(VER)-$(BUILD_NUMBER) -DREVISION=$(REVISION)
-export CFLAGS
+# -DVERSION/-DREVISION are added to CFLAGS by the Makefile of the App (from its info.json, ../_build_number and
+# ../_settings.env); here they are only passed down (adding them here too gave them twice on every gcc line)
+export BUILD_NUMBER REVISION
 
 
 .PHONY: clean upload

@@ -245,6 +245,19 @@ def generate(cfg, ini_path, project_dir, args):
         if used:
             say(f'      rendered with {used}')
 
+        # monitors are wires of dummy.v without a driver until the user assigns them: a commented hint for each one
+        # in the user area (outside the DOCKs, so config_tool.py never touches it again)
+        monitors = [c for c in cfg.controls if c.type == 'monitor']
+        if monitors:
+            hint = ['    // Monitors of app.ini (read only for the web page): each one needs a driver. Replace these',
+                    '    // examples by your signals (new_project.py):']
+            hint += [f'    // assign {c.name:<16s} = 0 ;   // {c.nbits} bits {"signed" if c.signed else "unsigned"}'
+                     for c in monitors]
+            mark = (r'^(    // NOW CONNECT CABLES AND MODULES\n'
+                    r'    // -{89}\n)')
+            edit_file(app_dir / 'fpga' / 'prj' / 'v0.94' / 'rtl' / 'dummy.v',
+                      [(mark, lambda m: m.group(1) + '\n' + '\n'.join(hint) + '\n')], count={mark: 1})
+
         say(f'[6/6] Registers -> dummy.v, C controller, web page, py/hugo.py, tcl: {app}/config_tool.py -a')
         r = subprocess.run([sys.executable, '-B', str(app_dir / 'config_tool.py'), '-a'],
                            cwd=app_dir, capture_output=True, text=True)

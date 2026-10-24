@@ -2298,7 +2298,7 @@
   }
 
   // The time units of the page change (a reply of the server with other time_units): the numbers of the X axis are
-  // converted, so it keeps showing the same window (rp_dummy2 1.0.1). The server signals a change with forcex_flag
+  // converted, so it keeps showing the same window (rp_dummy2 2.0.1). The server signals a change with forcex_flag
   // and its xmin/xmax, but with split POSTs (config load) only the last reply is read and its forcex_flag can be 0
   // already: the label changed and the numbers stayed (axis 1000x off). The units the axis numbers are in are kept
   // in x_axis_tu (set by initPlot() and here): the conversion is always from x_axis_tu to new_tu, so calling this
@@ -3941,7 +3941,7 @@
   // [CONFIG KEYS BEGIN] (pure function, also run by tests/raw_trigger_sim.js)
   // Keys of a saved configuration that are sent to the controller: the saved params of this version
   // (config_params_keys), the display keys (keep) and any param the controller has (orig: params.original, e.g.
-  // the controls of app.ini). A config of an older version (e.g. the lock-in display mode removed in 1.0.0) or of
+  // the controls of app.ini). A config of an older version (e.g. the lock-in display mode removed in rp_dummy2 2.0.0) or of
   // another App made the controller log "Parameter ... not found, ignoring it" for each unknown key: they are
   // dropped here (listed with console.debug, to find them when debugging a config).
   function configKnownKeys(data, keys, keep, orig) {
@@ -3959,7 +3959,7 @@
   // X window of a saved config (xmin/xmax in its time_units: 0 us, 1 ms, 2 s) in the time units cur_tu of the
   // plot: { xmin, xmax, time_units: cur_tu }, or null if the config has no valid window. The plot axis and the
   // POST that follows use the current units, the server answers with forceX if they must change (as after a zoom).
-  // (1.0.1 retest: the numbers were taken as they were, 0..130 us loaded as 0..130 ms.)
+  // (rp_dummy2 2.0.1 retest: the numbers were taken as they were, 0..130 us loaded as 0..130 ms.)
   function configXWindow(cfg, cur_tu) {
     var x0 = Number(cfg.xmin), x1 = Number(cfg.xmax);
     if(!(isFinite(x0) && isFinite(x1) && x1 > x0)) return null;

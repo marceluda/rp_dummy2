@@ -1,6 +1,6 @@
 # Usage: create your own Red Pitaya App
 
-> Documented version: rp_dummy2 **1.0.1** (branch `devel2.0`, checkpoint CP6.1). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **2.0.1** (branch `devel2.0`, tag `v2.0.1`). Back to the [README](../README.md).
 > Related: [App.md](App.md) (what a generated App contains, registers, scope, Verilog modules),
 > [Devel.md](Devel.md) (build and upload), [Remote.md](Remote.md).
 
@@ -44,19 +44,19 @@ Python >= 3.8, standard library only (`new_project.py:25-26`). Run it from the r
                  [--icon-tool {auto,cairosvg,rsvg-convert,inkscape}] [-v] [--version] [NAME]
 ```
 
-| Option | Default | Meaning (source: `new_project.py:311-336`) |
+| Option | Default | Meaning (source: `new_project.py:324-336`) |
 |---|---|---|
 | `NAME` | `[general] AppName` of the `.ini` | Name of the App: folder and URL (`http://rp-XXXXXX.local/NAME/`). Letters, digits, `_`, `+`, `-`, starting with a letter (`config_lib.py:1532`) |
-| `-c INI`, `--config INI` | `config.ini` | `.ini` with the controls. If the default `config.ini` is not in the current folder, the one next to the script is used (`new_project.py:339-343`) |
+| `-c INI`, `--config INI` | `config.ini` | `.ini` with the controls. If the default `config.ini` is not in the current folder, the one next to the script is used (`new_project.py:352-343`) |
 | `-o DIR`, `--output DIR` | `.` | Folder where the project folder is created. It must exist |
 | `-p PROJECT`, `--project PROJECT` | `rp_NAME` | Name of the project folder (same character rules as `NAME`) |
 | `-n`, `--dry-run` | | Only check the `.ini` and print the register map; writes nothing |
-| `-f`, `--force` | | Replace the project folder if it exists, **only** if it is empty or looks like a project made by this script (a subfolder with `app.ini` + `config_tool.py`, `new_project.py:267-271`) |
+| `-f`, `--force` | | Replace the project folder if it exists, **only** if it is empty or looks like a project made by this script (a subfolder with `app.ini` + `config_tool.py`, `new_project.py:280-271`) |
 | `-u`, `--settings-only` | | Only (re)write `_settings.env` of an existing project from `[general] rp_host`, `ssh_opts`, `scp_opts` |
 | `--no-icon` | | Do not render the logo: the App uses the generic `resources/logo.png` (the name is still written in `resources/logo.svg`) |
 | `--icon-tool` | `auto` | Tool that renders `resources/logo.svg`: `auto` = the first available of `cairosvg` (Python module), `rsvg-convert` (`librsvg2-bin`), `inkscape` |
 | `-v`, `--verbose` | | Also show the output of `config_tool.py -a` |
-| `--version` | | Print the version of the generator (`rp_dummy2 1.0.1`) |
+| `--version` | | Print the version of the generator (`rp_dummy2 2.0.1`) |
 
 `./new_project.py -h` also lists every key of the `.ini` (§2). The version of the generator is written in the
 `info/info.json` (description), `README.md` and `CHANGELOG.md` of every generated App.
@@ -332,7 +332,9 @@ Open `<App>/fpga/prj/v0.94/rtl/dummy.v`. The parts between `[... DOCK]` and `[..
 | `trigger_signals` (l. 434) | Up to 8 trigger sources for Ext Trig (bit 0 = DIO0_P) |
 | `[FPGA MEMORY DOCK]` (l. 462) | Bus read/write of all the registers (generated) |
 
-The registers of the controls are already written by the web page; monitors are `wire`s that you must drive. Example
+The registers of the controls are already written by the web page; monitors are `wire`s that you must drive
+(`new_project.py` leaves a commented `// assign monitorX = 0 ;` for each one after the "NOW CONNECT CABLES AND
+MODULES" header: replace them by your signals). Example
 for the `.ini` of section 2 (a low-pass filter on a selectable input, a counter, monitors):
 
 ```verilog

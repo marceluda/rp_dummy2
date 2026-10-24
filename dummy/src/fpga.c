@@ -657,7 +657,7 @@ int osc_fpga_cnv_v_to_cnt(float voltage, float adc_max_v,
 /*----------------------------------------------------------------------------*/
 /**
  * @brief Trigger level given in ADC counts (Raw Mode) -> the voltage that osc_fpga_cnv_v_to_cnt() turns into
- *        exactly those counts (its inverse; rp_dummy2 1.0.1: before, the counts were taken as volts)
+ *        exactly those counts (its inverse; rp_dummy2 2.0.1: before, the counts were taken as volts)
  *
  * @param[in] cnts           Level in raw ADC counts (-8192..8191, as shown in Raw Mode: no calibration offset)
  * @param[in] adc_max_v      Maximal ADC voltage passed to osc_fpga_cnv_v_to_cnt(), specified in [V]

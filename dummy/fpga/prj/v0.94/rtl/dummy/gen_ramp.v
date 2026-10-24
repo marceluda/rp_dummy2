@@ -8,7 +8,7 @@
 // 
 // outB = outA * ramp_B_factor / 4096 (registered: one clock after outA).
 //
-// rp_dummy2 1.0.0: the relock system of the lock-in Apps was removed (its module gen_ramp_relock is not in
+// rp_dummy2 2.0.0: the relock system of the lock-in Apps was removed (its module gen_ramp_relock is not in
 // this library) and the multiplier is a registered '*' (Vivado infers a DSP) instead of mult_dsp_14 (a Xilinx
 // core that is not in the project). Before, the module could not be synthesized.
 // 

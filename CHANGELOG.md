@@ -4,7 +4,27 @@ Versions of the generator (`new_project.py`, `config_tool.py` and the `dummy/` t
 prints it; it is `RP_DUMMY_VERSION` in `dummy/config_lib.py`. Each generated App keeps its own version (`0.1.0` when it
 is created, in `<App>/info/info.json`) and records the version of the generator that made it.
 
-## 1.0.1 (2026-10-23, branch `devel2.0`, CP6.1)
+The first two versions for Ecosystem 2.0 were labelled `1.0.0` (CP6, commit `67970b6`) and `1.0.1` (CP6.1, commit
+`493654f`) when they were made; on 2026-10-24 they were renamed `2.0.0` and `2.0.1` (the major number follows the
+Red Pitaya Ecosystem 2.0 of the generated Apps). The `RP_DUMMY_VERSION` of those two commits still says `1.0.x`.
+
+## 2.0.1 (2026-10-24, branch `devel2.0`; first labelled 1.0.1)
+
+### Streaming settings kept when the App is opened again, small fixes (2026-10-24)
+- **Streaming settings restored when the App is opened again**: the bitstream load reset `stream_ip`, `stream_port`
+  and `stream_rate` (0 / 6000 / 128) every time, so they had to be written again. The controller now saves them in
+  `/tmp/<App>_stream.conf` whenever it sees them changed (on every request of the page) and when the App exits, and
+  writes them back to the FPGA in `rp_app_init()` (after the bitstream load). `stream_cmd` is never saved. A file that
+  is not valid (unknown or repeated key, value out of range or not decimal, too long) is ignored as a whole, with a
+  line in the nginx log. New `src/stream_conf.c`/`.h`; `/tmp` because `/opt/redpitaya` is read-only on Ecosystem 2.0.
+- `new_project.py`: a commented `// assign monitorX = 0 ;` for each monitor of the `.ini` after the "NOW CONNECT
+  CABLES AND MODULES" header of `dummy.v` (user area, written once; a new App left the monitors undriven).
+- `-DVERSION`/`-DREVISION` were given twice on every gcc line (the project Makefile exported `CFLAGS` with them and
+  the Makefile of the App added them again): only the App's Makefile adds them now.
+- Version labels: `RP_DUMMY_VERSION = 2.0.1` (see the note above); the documents and comments say 2.0.x.
+- Tests: `tests/stream_conf_test.c` (36 checks); `generator_test.py`: monitor hints, `-DVERSION` once (16 tests).
+
+### CP6.1 (2026-10-23)
 
 - **Raw Mode trigger level in ADC counts** (bug of every earlier version): the controller wrote the level as volts
   (100 counts → threshold 8191: Normal never triggered; AUTO's level saturated too), the page limited it to ±1 and AUTO
@@ -34,19 +54,19 @@ is created, in `<App>/info/info.json`) and records the version of the generator 
 - `c/stream_tcp_osc_cmd`: when `stream_cmd` is already 0, the jump of the write counter caused by the controller
   taking the scope back is not counted as an overrun (each streaming ended with one `overrun #1` and `lost` > 0); the
   block is dropped as `end_drop`, as before.
-- Config load: keys unknown to the App (e.g. the parameter removed in 1.0.0 in an old config) are not sent (the
+- Config load: keys unknown to the App (e.g. the parameter removed in 2.0.0 in an old config) are not sent (the
   controller logged "Parameter ... not found"); listed with `console.debug`.
 - Tests: `tests/trig_level_test.c` (real `fpga.c`), `tests/raw_trigger_sim.js`, Raw Mode cases in
   `auto_set_harness.c`, clean stop and reading during the stop in `remote_test.py`, config load X axis in
   `ext_trig_reset_zoom_sim.js`.
 
-## 1.0.0 (2026-10-23, branch `devel2.0`)
+## 2.0.0 (2026-10-23, branch `devel2.0`; first labelled 1.0.0)
 
 First version for Red Pitaya **Ecosystem 2.0**, made in checkpoints CP1–CP6 (tested on a STEMlab 125-14 with
 RedPitaya_OS 2.04-35). Generated Apps still carry the files of Ecosystem 0.9x/1.0 (built, not tested on such a board).
 
 ### CP6: version, Ecosystem 0.9x/1.0, documentation, library fixes
-- Version of the generator: `RP_DUMMY_VERSION = 1.0.0`, `new_project.py --version`; written in the `info.json`,
+- Version of the generator: `RP_DUMMY_VERSION` (`1.0.0` in that commit, renamed 2.0.0), `new_project.py --version`; written in the `info.json`,
   `README.md` and `CHANGELOG.md` of the generated Apps.
 - `new_project.py -h` lists every key of the `.ini` (`[general]`: `AppName`, `include_genfun`, `include_pids`,
   `register_map`, `rp_host`, `ssh_opts`, `scp_opts`; controls: `type`, `label`, `bits_number`, `signed`, `default`,

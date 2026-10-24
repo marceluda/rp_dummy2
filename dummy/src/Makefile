@@ -1,7 +1,7 @@
 CC=$(CROSS_COMPILE)gcc
 RM=rm
 
-OBJECTS=main.o fpga.o worker.o calib.o fpga_awg.o generate.o fpga_pid.o pid.o fpga_dummy.o dummy.o
+OBJECTS=main.o fpga.o worker.o calib.o fpga_awg.o generate.o fpga_pid.o pid.o fpga_dummy.o dummy.o stream_conf.o
 
 CFLAGS+= -Wall -Werror -g -fPIC $(INCLUDE)
 # -lm: round/ceil/sqrt...; -lpthread: worker thread and mutexes (explicit, so that controllerhf.so

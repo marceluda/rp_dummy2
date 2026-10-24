@@ -23,7 +23,7 @@ module fun_icdf
         $readmemb("icdf_data.dat", icdf); // read memory binary code from data_sin.dat
     end
 
-    // |in| (before rp_dummy2 1.0.0 the comparison 'in >= 11'b0' was unsigned, always true)
+    // |in| (before rp_dummy2 2.0.0 the comparison 'in >= 11'b0' was unsigned, always true)
     assign pos = in[10] ? -in  : in ;
 
     assign out_fun = icdf[pos[10-1:0]];

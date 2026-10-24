@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// rp_dummy2 1.0.1 (CP6.1): units of the trigger level in the web page, Raw Mode in ADC counts.
+// rp_dummy2 2.0.1 (CP6.1): units of the trigger level in the web page, Raw Mode in ADC counts.
 // Before, the page converted the level with the volts scale also in Raw Mode and limited it to +-gui_reset_y_range/2
 // (+-1): a level of 100 counts was sent as 100 (then taken as 100 V by the controller: threshold 8191) and shown as 1.
 // Real functions of index.html: the [RAW TRIGGER] block (trigRaw, trigLevelScale, pageToTrigLevel, trigLevelToPage,
@@ -37,7 +37,7 @@ const debug = [];
 ctx.console = { debug: m => debug.push(m), log: () => {} };
 vm.runInContext(blockSrc('RAW TRIGGER') + '\n' + fnSrc('roundLevel') + '\n' + blockSrc('CONFIG KEYS') +
                 '\nthis.__get = function(e){return eval(e)};', ctx);
-// (a missing function, e.g. in the index.html of 1.0.0, gives NaN: its checks fail instead of stopping the test)
+// (a missing function, e.g. in the index.html of 2.0.0, gives NaN: its checks fail instead of stopping the test)
 const F = n => { try { return ctx.__get(n); } catch(e) { return () => NaN; } };
 
 let fails = 0, n = 0;
@@ -117,7 +117,7 @@ check('6.10 the level box and the slider drag pass the server limits', (js.match
   check('5.1 known keys kept (saved params, display keys, params of the controller such as an app.ini control)',
         out && out.trig_level === 3 && out.dummy_osc_raw_mode === 1 && out.dummy_oscA_sw === 5 && out.meas_min_ch1 === 0 &&
         out.numberA === 7, JSON.stringify(out));
-  check('5.2 dummy_osc_lockin_mode (removed in 1.0.0) and lock-in keys dropped',
+  check('5.2 dummy_osc_lockin_mode (removed in 2.0.0) and lock-in keys dropped',
         out && !('dummy_osc_lockin_mode' in out) && !('lock_ctrl_aux_pidA_enable_ctrl' in out));
   check('5.3 debug note with the dropped keys', debug.some(m => /dummy_osc_lockin_mode, lock_ctrl_aux_pidA_enable_ctrl/.test(m)), debug[0]);
   check('5.4 config_load_storage() uses it', /configKnownKeys\(/.test(fnSrc('config_load_storage')) && /loadParams\(cfg\)/.test(fnSrc('config_load_storage')));

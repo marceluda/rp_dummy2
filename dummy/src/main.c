@@ -33,6 +33,7 @@
 #include "pid.h"
 #include "dummy.h"
 #include "fpga_dummy.h"
+#include "stream_conf.h"
 
 
 /* Describe app. parameters with some info/limitations */
@@ -377,6 +378,9 @@ const char *rp_app_desc(void)
     return (const char *)"Osciloscope+Dummy application.\n";
 }
 
+static void stream_conf_restore(void);
+static void stream_conf_track(const char *who);
+
 int rp_app_init(void)
 {
     fprintf(stderr, "Loading scope (with dummy extensions) version %s-%s.\n", VERSION_STR, REVISION_STR);
@@ -409,6 +413,10 @@ int rp_app_init(void)
         return -1;
     }
 
+    /* the bitstream was just loaded (fpga.sh): stream_ip/port/rate are at their reset values */
+    TRACE("LOLO(rp_app_init): Now: stream_conf_restore\n");
+    stream_conf_restore();
+
     TRACE("LOLO(rp_app_init): PARAMS_NUM: %d \n", PARAMS_NUM);
 
     rp_set_params(&rp_main_params[0], PARAMS_NUM );
@@ -423,6 +431,62 @@ int rp_app_init(void)
  * the PL through /dev/mem: they must not run when Ecosystem 2.0 loads the FPGA of another App.
  * new_project.py writes the App name in APP_DIR. */
 #define APP_DIR "/opt/redpitaya/www/apps/dummy"
+
+/* Streaming settings kept between runs of the App (stream_conf.c, rp_dummy2 2.0.1): stream_ip, stream_port and
+ * stream_rate are written back to the FPGA when the App is opened (the bitstream load resets them), and saved in
+ * /tmp/<App>_stream.conf whenever they are seen changed (on every request of the page, rp_get_params) and when the
+ * App exits. stream_cmd is never saved. */
+static pthread_mutex_t stream_conf_mutex = PTHREAD_MUTEX_INITIALIZER;
+static char            stream_conf_file[256];
+static stream_conf_t   stream_conf_last;      /* what the file has (or the FPGA had after the restore) */
+static int             stream_conf_ready = 0; /* stream_conf_file and stream_conf_last valid */
+
+static void stream_conf_read_regs(stream_conf_t *c)
+{
+    c->ip   = *(volatile uint32_t *)&g_dummy_reg->stream_ip;
+    c->port = *(volatile uint32_t *)&g_dummy_reg->stream_port;
+    c->rate = *(volatile uint32_t *)&g_dummy_reg->stream_rate;
+}
+
+static void stream_conf_restore(void)
+{
+    stream_conf_t c;
+    pthread_mutex_lock(&stream_conf_mutex);
+    stream_conf_ready = 0;
+    if(g_dummy_reg && stream_conf_path(APP_DIR, stream_conf_file, sizeof(stream_conf_file)) == 0) {
+        if(stream_conf_load(stream_conf_file, &c) == 0) {
+            *(volatile uint32_t *)&g_dummy_reg->stream_ip   = c.ip;
+            *(volatile uint32_t *)&g_dummy_reg->stream_port = c.port;
+            *(volatile uint32_t *)&g_dummy_reg->stream_rate = c.rate;
+            fprintf(stderr, "rp_app_init: streaming settings restored from %s: stream_ip=%u stream_port=%u "
+                    "stream_rate=%u\n", stream_conf_file, (unsigned)c.ip, (unsigned)c.port, (unsigned)c.rate);
+        } else if(access(stream_conf_file, F_OK) == 0) {
+            fprintf(stderr, "rp_app_init: %s ignored (not valid): streaming settings at their reset values\n",
+                    stream_conf_file);
+        }
+        stream_conf_read_regs(&stream_conf_last);
+        stream_conf_ready = 1;
+    }
+    pthread_mutex_unlock(&stream_conf_mutex);
+}
+
+/* save the settings if they changed since the last save */
+static void stream_conf_track(const char *who)
+{
+    stream_conf_t c;
+    pthread_mutex_lock(&stream_conf_mutex);
+    if(stream_conf_ready && g_dummy_reg) {
+        stream_conf_read_regs(&c);
+        /* out of range (written by hand over /dev/mem): not saved, the file would be rejected */
+        if((c.ip != stream_conf_last.ip || c.port != stream_conf_last.port || c.rate != stream_conf_last.rate) &&
+           c.port <= STREAM_CONF_MAX_PORT && c.rate <= STREAM_CONF_MAX_RATE) {
+            if(stream_conf_save(stream_conf_file, &c) < 0)
+                fprintf(stderr, "%s: cannot write %s: %s\n", who, stream_conf_file, strerror(errno));
+            stream_conf_last = c;       /* tried once per change: no retry (and no message) on every request */
+        }
+    }
+    pthread_mutex_unlock(&stream_conf_mutex);
+}
 
 /* Send sig to every c/streaming (from first = 0) and c/stream_tcp_osc_cmd of this App.
  * Returns how many were found alive (zombies are not counted). */
@@ -497,6 +561,12 @@ static void stream_stop_all(void)
 int rp_app_exit(void)
 {
     fprintf(stderr, "Unloading scope (with dummy extensions) version %s-%s.\n", VERSION_STR, REVISION_STR);
+
+    TRACE("LOLO(rp_app_exit): Now: stream_conf_track\n");
+    stream_conf_track("rp_app_exit");
+    pthread_mutex_lock(&stream_conf_mutex);
+    stream_conf_ready = 0;              /* the registers are unmapped below */
+    pthread_mutex_unlock(&stream_conf_mutex);
 
     TRACE("LOLO(rp_app_exit): Now: stream_stop_all\n");
     stream_stop_all();
@@ -760,7 +830,7 @@ void transform_to_iface_units(rp_app_params_t *p)
     /* Re-calculate output parameters */
     p[GUI_RST_Y_RANGE].value = 2.0 * maxv;
 
-    /* Raw Mode: the auto-set gives the Y range in ADC counts, not scaled (rp_dummy2 1.0.1; the limits of
+    /* Raw Mode: the auto-set gives the Y range in ADC counts, not scaled (rp_dummy2 2.0.1; the limits of
      * min_y/max_y(_norm) are +-20000 so that +-8192 counts * 1.2 is not clipped to +-1000) */
     if(p[DUMMY_OSC_RAW_MODE].value > 0)
         scale = 1;
@@ -1114,6 +1184,7 @@ int rp_get_params(rp_app_params_t **p)
      * request, not only when a complete capture arrives: with Normal waiting for its trigger or a long
      * window the page kept showing old values */
     dummy_update_main(&rp_main_params[0]);
+    stream_conf_track("rp_get_params");
     for(i = 0; i < PARAMS_NUM; i++) {
         int p_strlen = strlen(rp_main_params[i].name);
         p_copy[i].name = (char *)malloc(p_strlen+1);

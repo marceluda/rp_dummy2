@@ -1,7 +1,7 @@
 # Host-side regression tests of the template (no Red Pitaya, no cross compiler, no Vivado).
 #
 #   make          build and run every test
-#   make c        auto_set_harness, trig_level_test and test_tools.sh only
+#   make c        auto_set_harness, trig_level_test, stream_conf_test and test_tools.sh only
 #   make js       web page simulations (node)
 #   make py       generator and remote control script tests (python3)
 #   make hdl      optional, not in "make": library modules in the Vivado 2020.1 simulator (xsim)
@@ -16,6 +16,8 @@
 # (modules -> tcl, combo texts from muxers and [names], c/names_dic.txt, app.ini changes, --rename),
 # App name in the paths of fpga.sh / nginx.conf / src/main.c, c/ without binaries.
 # trig_level_test: Raw Mode trigger level (counts -> threshold register) with the real dummy/src/fpga.c.
+# stream_conf_test: file of the streaming settings kept between runs of the App (dummy/src/stream_conf.c):
+# round trip, path from APP_DIR, bad files ignored, temporary file never followed through a link.
 # test_tools.sh: c/dummy and c/osc built for the PC on a sparse file instead of /dev/mem (reads, writes,
 # errors, ranges), and the offsets of app_regs.h against the register struct of the controller.
 # remote_test.py: resources/streaming/stream_receiver.py (--board) and resources/remote_control/http_regs.py
@@ -41,9 +43,13 @@ run: c js py
 trig_level_test: trig_level_test.c $(SRC)/fpga.c $(SRC)/fpga.h
 	$(CC) $(CFLAGS) -o $@ trig_level_test.c $(SRC)/fpga.c -lm
 
-c: auto_set_harness trig_level_test
+stream_conf_test: stream_conf_test.c $(SRC)/stream_conf.c $(SRC)/stream_conf.h
+	$(CC) $(CFLAGS) -o $@ stream_conf_test.c $(SRC)/stream_conf.c
+
+c: auto_set_harness trig_level_test stream_conf_test
 	$(TIMEOUT) ./auto_set_harness
 	$(TIMEOUT) ./trig_level_test
+	$(TIMEOUT) ./stream_conf_test
 	$(TIMEOUT) ./test_tools.sh
 
 JS_SIMS = plot_wheel_sim.js ext_trig_reset_zoom_sim.js raw_trigger_sim.js
@@ -71,4 +77,4 @@ hdl:
 	grep "LIB ERRORS" hdl_sim/xsim.log ; grep -q "LIB ERRORS=0" hdl_sim/xsim.log
 
 clean:
-	rm -rf auto_set_harness trig_level_test hdl_sim
+	rm -rf auto_set_harness trig_level_test stream_conf_test hdl_sim

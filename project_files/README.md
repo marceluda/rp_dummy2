@@ -57,9 +57,10 @@ web page. With the App open, the simplest way is
 `resources/streaming/stream_receiver.py --board rp-XXXXXX.local --app @APP@ -r 128 -n 10` (it writes the registers,
 starts the streaming, receives 10 s and stops it). By hand: start a receiver on the PC
 (`resources/streaming/stream_receiver.py -p 6000`), then `/<App>/dummy?stream_ip=...&stream_port=6000&stream_rate=128`,
-`/<App>/streaming`, `/<App>/dummy?stream_cmd=1`; stop with `stream_cmd=0` (also done when the App stops). **Each time
-the App is opened its FPGA is loaded again and the `stream_*` registers return to 0 / 6000 / 128 / 0: write
-`stream_ip` (and the others) again before streaming.** While streaming, the web page scope does not refresh (the
+`/<App>/streaming`, `/<App>/dummy?stream_cmd=1`; stop with `stream_cmd=0` (also done when the App stops). Each time
+the App is opened its FPGA is loaded again, but the controller writes `stream_ip`, `stream_port` and `stream_rate`
+back from `/tmp/@APP@_stream.conf` on the board (saved when they change and when the App exits; not after a reboot);
+`stream_cmd` always starts at 0. While streaming, the web page scope does not refresh (the
 scope belongs to `c/stream_tcp_osc_cmd`). `resources/remote_control/http_regs.py` is an HTTP client example. More in
 `doc/Remote.md` of rp_dummy2 (the generator).
 
