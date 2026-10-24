@@ -668,7 +668,8 @@ int osc_fpga_cnv_v_to_cnt(float voltage, float adc_max_v,
 float osc_fpga_cnv_cnt_to_trig_v(float cnts, float adc_max_v,
                                  int calib_dc_off, float user_dc_off)
 {
-    float c = roundf(cnts);
+    /* whole counts rounded as the page does (Math.round: halves up, -2.5 -> -2; rp_dummy2 2.0.2: roundf() gave -3) */
+    float c = floorf(cnts + 0.5f);
     if(c >  (float)((1<<(c_osc_fpga_adc_bits-1))-1)) c = (float)((1<<(c_osc_fpga_adc_bits-1))-1);
     if(c < -(float)(1<<(c_osc_fpga_adc_bits-1)))     c = -(float)(1<<(c_osc_fpga_adc_bits-1));
     return (c + calib_dc_off) * (2*adc_max_v) / (float)(1<<c_osc_fpga_adc_bits) + user_dc_off;

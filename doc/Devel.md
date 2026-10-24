@@ -1,6 +1,6 @@
 # Devel: compiling, testing and uploading
 
-> Documented version: rp_dummy2 **2.0.1** (branch `devel2.0`, tag `v2.0.1`). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **2.0.2** (branch `devel2.0`, tag `v2.0.2`). Back to the [README](../README.md).
 > Related: [Usage.md](Usage.md) (generate an App, `config_tool.py`), [App.md](App.md) (registers, scope, modules).
 
 Contents:
@@ -201,19 +201,19 @@ make -C tests hdl        # optional (Vivado 2020.1 xsim, ~30 s, not part of "mak
 
 | Test | Covers |
 |---|---|
-| `auto_set_harness.c` (gcc) | AUTO of `dummy/src/worker.c` with a mock scope: 2.0 sample decoding, trigger level of sawtooth / square / DC, time limits (no hang without trigger), quit during AUTO; Raw Mode: level and Y range in counts, `rp_osc_trig_level_v()` |
-| `trig_level_test.c` (gcc, real `dummy/src/fpga.c`) | Raw Mode trigger level: every 14-bit level, full scale and offset gives the same counts in the threshold register |
+| `auto_set_harness.c` (gcc) | AUTO of `dummy/src/worker.c` with a mock scope: 2.0 sample decoding, trigger level of sawtooth / square / DC, time limits (no hang without trigger), quit during AUTO; Raw Mode: level and Y range in counts, `rp_osc_trig_level_v()`; with calibration offsets (2.0.2): threshold of the search and of the resulting level at the middle of the raw signal in volts mode (CH1 and CH2), Raw level on a half count rounded as the page; level and Y range with a calibrated full scale of 1.07 V (`max_adc_norm`) |
+| `trig_level_test.c` (gcc, real `dummy/src/fpga.c`) | Raw Mode trigger level: every 14-bit level, full scale and offset gives the same counts in the threshold register; half counts give the count shown by the page (`Math.round`, 2.0.2) |
 | `stream_conf_test.c` (gcc, real `dummy/src/stream_conf.c`) | File of the streaming settings kept between runs of the App (`/tmp/<App>_stream.conf`): path from `APP_DIR`, save/load round trip and limits, accepted variations (order, comments, CRLF), every kind of bad file ignored as a whole (missing, empty, unknown / repeated key, `stream_cmd`, out of range, hex, negative, too long, NUL), temporary file replaced and never followed through a link (36 checks) |
 | `test_tools.sh` (gcc) | `c/dummy` and `c/osc` built for the PC over a sparse file instead of `/dev/mem`: reads, writes, hex, sign, errors (name, read only, range, negative in unsigned), a request with one error writes nothing, `TrgUnlock` 0x094 / `DebLen` 0x090; offsets of `c/app_regs.h` against `dummy_reg_t` (`_Static_assert`) |
 | `plot_wheel_sim.js` (node) | Mouse wheel over the scope: both axes, SHIFT, ALT, cursors, limits (57 checks) |
 | `ext_trig_reset_zoom_sim.js` (node) | Ext Trig → External + Normal; Reset zoom over the 10 time ranges; config load sets the X axis, also across time units; a reply that changes the time units converts the X axis once, also with repeated / out-of-order replies and split POSTs (every POST in the units of the server); config load resets the Y axis, also when it changes Raw Mode (V ↔ Raw, no double conversion); a Raw toggle of the user still converts Y (45 checks) |
-| `raw_trigger_sim.js` (node) | Units of the trigger level (volts, counts in Raw Mode, limits, switching Raw Mode), Y limits of the controller, config load without unknown keys, levels limited before sending, Y axis converted when Raw Mode is switched, units label (34 checks) |
+| `raw_trigger_sim.js` (node) | Units of the trigger level (volts, counts in Raw Mode, limits, switching Raw Mode), Y limits of the controller, config load without unknown keys, levels limited before sending, Y axis converted when Raw Mode is switched, units label, half counts shown as the whole count of the controller (38 checks) |
 | `generator_test.py` (python3) | Logo with each renderer and fallback, no DEBUG/RELOAD packages, `config_tool.py` (modules → tcl, combo texts from muxers and `[names]`, `names_dic.txt`, `app.ini` changes, `--rename`), App name in the paths of `fpga.sh` / `nginx.conf` / `src/main.c` and `c/` without binaries, version / `-h` keys / no lock-in leftovers / 0.9x bitstream of the packages, commented drivers of the monitors in `dummy.v`, `-DVERSION` once per gcc line (16 tests) |
 | `remote_test.py` (python3) | `resources/streaming/stream_receiver.py --board` (get_ip, `stream_*` writes, `/streaming`, `stream_cmd` 0/1/0, received and decoded data, clean stop: `stream_cmd=0` first and every sample until the board closes, the socket is read while the stop request is answered: the mock board measures how long it waits in `send()`; Ctrl-C (SIGINT) ×3 without losing data, double Ctrl-C (also with a slow stop request: one more short stop) and Ctrl-C during the setup, also during a slow name resolution, without traceback and without waiting) and `resources/remote_control/http_regs.py` against a mock board on localhost (10 tests) |
 | `lib_modules_tb.v` (`make hdl`, xsim) | `fun_icdf` (negative inputs and output sign), `fun_pico`, `gen_ramp` (limits, triggers, `outB`) of the library |
 
-Last run (2026-10-24, 2.0.1): auto-set ALL PASS, `trig_level_test` and `test_tools.sh` ALL PASS, `stream_conf_test`
-36/36, 57/57, 45/45, 34/34, 16 + 10 tests OK; `make hdl` LIB ERRORS=0 (2026-10-23, library unchanged since).
+Last run (2026-10-24, 2.0.2): auto-set ALL PASS (39 checks), `trig_level_test` and `test_tools.sh` ALL PASS, `stream_conf_test`
+36/36, 57/57, 45/45, 38/38, 16 + 10 tests OK; `make hdl` LIB ERRORS=0 (2026-10-23, library unchanged since).
 
 Other checks used during development (see the reports): `config_tool.py -a` twice on the template must leave it
 unchanged (idempotent); `make app` of a generated App with Linaro; `xvlog` + `xelab` (Vivado 2020.1 simulator) on

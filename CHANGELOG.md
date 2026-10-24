@@ -8,6 +8,32 @@ The first two versions for Ecosystem 2.0 were labelled `1.0.0` (CP6, commit `679
 `493654f`) when they were made; on 2026-10-24 they were renamed `2.0.0` and `2.0.1` (the major number follows the
 Red Pitaya Ecosystem 2.0 of the generated Apps). The `RP_DUMMY_VERSION` of those two commits still says `1.0.x`.
 
+## 2.0.2 (2026-10-24, branch `devel2.0`)
+
+### AUTO level with the calibration of the board (offsets, full scale), half counts in Raw Mode
+- **AUTO in volts mode counted the calibration offset twice in the search and left it out of the result**: the
+  min/max of the samples already include the DC offset of the calibration (`fe_chX_dc_offs`), and the threshold of the
+  search added it again (threshold one offset above the middle of the signal); the resulting level was taken from the
+  raw samples and so lacked it (one offset below the middle, also on the page). Now the offset is counted once
+  (`src/worker.c`, `rp_osc_auto_set()`): the threshold is the middle of the raw signal both during the search and with
+  the resulting level; the Y range is centred on the trace shown. Raw Mode was right since 2.0.1. Invisible on boards
+  with zero offsets (RP2), tens of counts on calibrated boards.
+- **Raw Mode, AUTO level on a half count**: the middle of the signal could be e.g. −2.5 counts; the page showed −2.5
+  and the controller wrote −3 (`roundf()`, halves away from zero). Now AUTO gives a whole count (`Math.round` of the
+  middle, in both modes), `osc_fpga_cnv_cnt_to_trig_v()` (`src/fpga.c`) rounds halves up like `Math.round`, and the
+  page shows the level in Raw Mode as that whole count (`trigLevelToPage()`; a half count can still come from a config
+  file or a remote client).
+- **AUTO in volts mode ignored the calibrated full scale**: it stored the level and the Y range as counts / 8192, but
+  those normalized params are read as counts × `max_adc_norm` / 8192 (the acquisition converts the level with
+  `max_adc_norm` = full scale of the CH1 calibration at gain HV-off / probe ×1, the page multiplies by
+  `max_adc_v / max_adc_norm`). With a full scale of 1.07 V the level and the Y range were 7 % closer to 0 (a level of
+  1000 counts gave a threshold of 935). Now the three assignments of `rp_osc_auto_set()` (level, Y range with and
+  without signal) multiply by `max_adc_norm` / 8192. Invisible with the default calibration (1 V, RP1/RP2).
+- Tests: `auto_set_harness.c` T11 (volts, offsets +40 / −25 on CH1 / CH2) and T12 (Raw, offset +40, middle −2497.5),
+  and T13 (full scale 1.07 V: level, Y range, DC branch); the mock scope now writes the threshold as `fpga.c` does (with
+  the offset) and computes the full scale from the calibration; `trig_level_test.c`: half counts; `raw_trigger_sim.js`
+  section 7 (38 checks). With the 2.0.1 sources: 11, 11 and 2 failures.
+
 ## 2.0.1 (2026-10-24, branch `devel2.0`; first labelled 1.0.1)
 
 ### Streaming settings kept when the App is opened again, small fixes (2026-10-24)

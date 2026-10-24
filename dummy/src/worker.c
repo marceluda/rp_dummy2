@@ -984,6 +984,11 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
                     int ch1_probe_att, int ch2_probe_att, int ch1_gain, int ch2_gain, int en_avg_at_dec)
 {
     const int c_noise_thr = 500; /* noise threshold */
+    /* Volts mode: the normalized params (trig_level, min_y/max_y_norm) are counts * max_adc_norm / 8192, as the acquisition
+     * (osc_fpga_update_params() with max_adc_norm) and the page (x scale = max_adc_v / max_adc_norm, src/main.c
+     * get_scales()) read them (rp_dummy2 2.0.2: before counts / 8192, off by 1/max_adc_norm with a calibrated full scale) */
+    const float cnt_to_norm = osc_fpga_calc_adc_max_v(rp_calib_params->fe_ch1_fs_g_hi, 0) /
+                              (float)(1 << (c_osc_fpga_adc_bits - 1));
     rp_osc_worker_state_t old_state, state;
     /* Min/maxes from both channel */
     int max_cha = INT_MIN;
@@ -1143,8 +1148,8 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
             orig_params[MIN_Y_NORM].value = min_y ;
             orig_params[MAX_Y_NORM].value = max_y ;
         }else{
-            orig_params[MIN_Y_NORM].value = min_y / (float)(1 << (c_osc_fpga_adc_bits - 1));
-            orig_params[MAX_Y_NORM].value = max_y / (float)(1 << (c_osc_fpga_adc_bits - 1));
+            orig_params[MIN_Y_NORM].value = min_y * cnt_to_norm;
+            orig_params[MAX_Y_NORM].value = max_y * cnt_to_norm;
         }
 
 
@@ -1163,6 +1168,7 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
         int time_range;                /* decimation from 0 to 5 */
         float max_adc_v;
         int calib_dc_off;
+        int smpl_off;                  /* calibration offset included in min_y/max_y (volts mode) or 0 (Raw Mode) */
 
        int wr_ptr_curr, wr_ptr_trig;
 
@@ -1183,9 +1189,13 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
         TRACE("AUTO: trig level: %d\n", trig_level);
         TRACE("AUTO: min,max: %d  %d\n", min_y, max_y);
 
-        /* trig_level is in raw ADC counts (min/max of the samples) in both modes: the voltage that gives exactly
-         * those counts (before, in Raw Mode the calibration offset was left out) */
-        trig_level_v = osc_fpga_cnv_cnt_to_trig_v(trig_level, max_adc_v, calib_dc_off, 0);
+        /* min_y/max_y (and trig_level) are in the units of the samples above: raw ADC counts in Raw Mode, raw counts
+         * plus the calibration offset in volts mode. The scope compares its threshold with the raw counts, so in
+         * volts mode the calibration offset is taken out once (smpl_off) and the threshold is exactly the middle of
+         * the raw signal (rp_dummy2 2.0.2: before, in volts mode the offset was added twice, threshold calib_dc_off
+         * above the middle; 2.0.1 fixed Raw Mode, where it was left out) */
+        smpl_off = (rp_osc_params[DUMMY_OSC_RAW_MODE].value > 0) ? 0 : calib_dc_off;
+        trig_level_v = osc_fpga_cnv_cnt_to_trig_v(trig_level, max_adc_v, calib_dc_off - smpl_off, 0);
         int loc_max = INT_MIN;
         int loc_min = INT_MAX;
 
@@ -1243,10 +1253,15 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
 
             rp_osc_meas_res_t meas;
             rp_osc_meas_clear(&meas);
-            meas.min = min_y;
-            meas.max = max_y;
+            /* meas_period() reads the raw samples of the scope: thresholds and min/max in raw counts, then back to
+             * the units of min_y/max_y (2.0.2: before, the final level in volts mode lacked the calibration offset,
+             * threshold calib_dc_off below the middle, and the Y range mixed both units) */
+            meas.min = min_y - smpl_off;
+            meas.max = max_y - smpl_off;
 
             meas_period(&meas, sig_data, wr_ptr_trig, dec_factor, &loc_min, &loc_max);
+            loc_min += smpl_off;
+            loc_max += smpl_off;
             period = meas.period;
             TRACE("AUTO: period = %.6f\n", period);
 
@@ -1270,11 +1285,13 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
                 orig_params[TIME_RANGE_PARAM].value = time_range;
                 orig_params[TRIG_SRC_PARAM].value   = trig_src_ch;
 
+                /* Level: the middle rounded to a whole count as the page rounds (Math.round, halves up) and as
+                 * osc_fpga_cnv_cnt_to_trig_v() does (2.0.2: before, a half count, e.g. -2.5, was shown as -2.5
+                 * and written to the scope as -3) */
                 if(rp_osc_params[DUMMY_OSC_RAW_MODE].value>0){  // LOLO
-                    orig_params[TRIG_LEVEL_PARAM].value =((float)(loc_max + loc_min))/2 ;
+                    orig_params[TRIG_LEVEL_PARAM].value = floorf((float)(loc_max + loc_min) / 2 + 0.5f);
                 }else{
-                    orig_params[TRIG_LEVEL_PARAM].value = ((float)(loc_max + loc_min))/2 /
-                                            (float)(1<<(c_osc_fpga_adc_bits-1));
+                    orig_params[TRIG_LEVEL_PARAM].value = floorf((float)(loc_max + loc_min) / 2 + 0.5f) * cnt_to_norm;
                 }
 
 
@@ -1317,8 +1334,8 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
                     orig_params[MIN_Y_NORM].value = min_y ;
                     orig_params[MAX_Y_NORM].value = max_y ;
                 }else{
-                    orig_params[MIN_Y_NORM].value = min_y / (float)(1 << (c_osc_fpga_adc_bits - 1));
-                    orig_params[MAX_Y_NORM].value = max_y / (float)(1 << (c_osc_fpga_adc_bits - 1));
+                    orig_params[MIN_Y_NORM].value = min_y * cnt_to_norm;
+                    orig_params[MAX_Y_NORM].value = max_y * cnt_to_norm;
                 }
 
                 // For POST response ...

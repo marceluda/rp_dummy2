@@ -3,7 +3,8 @@
  * worker.c is compiled for the host and linked with a mock of the scope (osc_fpga_*) and stubs of main.c.
  *   make -C tests        (host gcc; builds and runs it against ../dummy/src/worker.c)
  * The mock scope returns 16-bit sign-extended samples (2.0 FPGA). The level trigger fires only if the
- * level is strictly inside the signal range (or never, in the "no level trigger" tests).
+ * level is strictly inside the signal range (or never, in the "no level trigger" tests); the level is turned into the
+ * threshold register as dummy/src/fpga.c does, with the calibration offset (T11/T12, rp_dummy2 2.0.2).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,9 @@ const float c_osc_fpga_smpl_period = 8e-12;   /* 1000x shorter than real: short 
 static int  m_cha[OSC_FPGA_SIG_LEN], m_chb[OSC_FPGA_SIG_LEN];
 static int  m_src = 0, m_trig_imm = 0, m_trig_ch = 0;
 static float m_level_v = 0;
+static int  m_thr = 0;                       /* threshold register of the scope (raw counts), as dummy/src/fpga.c */
+static int  m_thr_first = 0, m_thr_n = 0;    /* first level threshold written by an AUTO (its search loop) */
+static int  m_calib[2] = { 0, 0 };           /* calibration offsets passed to osc_fpga_update_params() */
 static int  m_level_never = 0;               /* 1: the level trigger never fires */
 static int  m_dead = 0;                      /* 1: no trigger at all (not even immediate) */
 static int  m_min[2], m_max[2];
@@ -35,7 +39,11 @@ int osc_fpga_arm_trigger(void) { return 0; }
 int osc_fpga_set_trigger(uint32_t trig_source) { m_src = trig_source; return 0; }
 int osc_fpga_get_wr_ptr(int *wr_ptr_curr, int *wr_ptr_trig) { if(wr_ptr_curr) *wr_ptr_curr = 0; if(wr_ptr_trig) *wr_ptr_trig = 0; return 0; }
 int osc_fpga_get_sig_ptr(int **cha_signal, int **chb_signal) { *cha_signal = m_cha; *chb_signal = m_chb; return 0; }
-float osc_fpga_calc_adc_max_v(uint32_t fe_gain_fs, int probe_att) { return 1.0; }
+/* as dummy/src/fpga.c; a calibration of 0 (the other tests) counts as 1 V */
+float osc_fpga_calc_adc_max_v(uint32_t fe_gain_fs, int probe_att)
+{
+    return fe_gain_fs ? fe_gain_fs / (float)((uint64_t)1 << 32) * 100 * (probe_att > 0 ? 10 : 1) : 1.0;
+}
 int osc_fpga_cnv_trig_source(int trig_imm, int trig_source, int trig_edge)
 {
     if(trig_imm) return 1;
@@ -57,10 +65,17 @@ float osc_fpga_cnv_cnt_to_v(int cnts, float adc_max_v, int calib_dc_off, float u
 /* same formula as dummy/src/fpga.c (tested against the real osc_fpga_cnv_v_to_cnt() in trig_level_test.c) */
 float osc_fpga_cnv_cnt_to_trig_v(float cnts, float adc_max_v, int calib_dc_off, float user_dc_off)
 {
-    float c = roundf(cnts);
+    float c = floorf(cnts + 0.5f);                 /* 2.0.2: Math.round of the page (before roundf) */
     if(c > 8191) c = 8191;
     if(c < -8192) c = -8192;
     return (c + calib_dc_off) * (2*adc_max_v) / 16384.0f + user_dc_off;
+}
+/* osc_fpga_cnv_v_to_cnt() of dummy/src/fpga.c without the 14-bit wrap (round away from zero, minus the calibration):
+ * the threshold that the scope compares with the raw samples */
+static int mock_v_to_cnt(float v, float adc_max_v, int calib_dc_off)
+{
+    if(v > adc_max_v) v = adc_max_v; else if(v < -adc_max_v) v = -adc_max_v;
+    return (int)round(v * 16384.0f / (2 * adc_max_v)) - calib_dc_off;
 }
 int osc_fpga_update_params(int trig_imm, int trig_source, int trig_edge, float trig_delay, float trig_level,
                            int time_range, float ch1_adc_max_v, float ch2_adc_max_v, int ch1_calib_dc_off,
@@ -68,6 +83,9 @@ int osc_fpga_update_params(int trig_imm, int trig_source, int trig_edge, float t
                            int ch2_probe_att, int ch1_gain, int ch2_gain, int enable_avg_at_dec)
 {
     m_trig_imm = trig_imm; m_trig_ch = trig_source; m_level_v = trig_level;
+    m_calib[0] = ch1_calib_dc_off; m_calib[1] = ch2_calib_dc_off;
+    m_thr = mock_v_to_cnt(trig_level, trig_source ? ch2_adc_max_v : ch1_adc_max_v, trig_source ? ch2_calib_dc_off : ch1_calib_dc_off);
+    if(!trig_imm && m_thr_n++ == 0) m_thr_first = m_thr;
     return 0;
 }
 int osc_fpga_triggered(void)
@@ -77,7 +95,7 @@ int osc_fpga_triggered(void)
     if(m_src == 1) return 1;                       /* immediate */
     if(m_level_never) return 0;
     ch  = (m_src <= 3) ? 0 : 1;
-    lvl = (int)lround(m_level_v * 8192.0);
+    lvl = m_thr;                                    /* raw counts, with the calibration offset (2.0.2) */
     return (lvl > m_min[ch]) && (lvl < m_max[ch]);  /* the signal crosses the level */
 }
 
@@ -120,6 +138,15 @@ static void set_signal(int ch, int kind, int amp, int period)
     }
 }
 
+/* square between two levels (raw counts) */
+static void set_square(int ch, int lo, int hi, int period)
+{
+    int i, *b = ch ? m_chb : m_cha;
+    for(i = 0; i < OSC_FPGA_SIG_LEN; i++)
+        b[i] = (((i % period) < period / 2) ? lo : hi) & 0xFFFF;
+    m_min[ch] = lo; m_max[ch] = hi;
+}
+
 static rp_app_params_t P[PARAMS_NUM+1];
 static int fails = 0;
 #define CHECK(c, ...) do { if(c) printf("  PASS: "); else { printf("  FAIL: "); fails++; } printf(__VA_ARGS__); printf("\n"); } while(0)
@@ -128,6 +155,7 @@ static int run_auto(double *dt)
 {
     int r; double t0;
     memset(P, 0, sizeof(P));
+    m_thr_n = 0;
     rp_osc_worker_change_state(rp_osc_auto_set_state);
     t0 = now_s();
     r = rp_osc_auto_set(P, 1.0, 1.0, 0, 0, 0, 0, 0, 0, 0);
@@ -207,6 +235,74 @@ int main(void)
         v = rp_osc_trig_level_v(Q, 2.0);
         CHECK(fabsf(v - (-10.0f * 2 / 8192 + 0.5f)) < 1e-6, "Raw, CH2: -3 counts (calib -7, user offset 0.5 V, 2 V full scale) -> %g V", v);
         calib.fe_ch1_dc_offs = 0; calib.fe_ch2_dc_offs = 0;
+    }
+
+    printf("T11 AUTO in volts mode with calibration offsets (CH1 +40, CH2 -25): threshold at the middle of the raw signal\n");
+    {
+        int thr;
+        calib.fe_ch1_dc_offs = 40; calib.fe_ch2_dc_offs = -25;
+        m_level_never = 0; set_square(0, -1000, 3000, 2000); set_signal(1, 0, 0, 1);
+        r = run_auto(&dt);
+        CHECK(r == 0 && P[TRIG_MODE_PARAM].value == 1 && P[TRIG_SRC_PARAM].value == 0, "CH1: returns 0, Normal, source CH1 (%d, mode %g, src %g)",
+              r, P[TRIG_MODE_PARAM].value, P[TRIG_SRC_PARAM].value);
+        CHECK(m_thr_first == 1000, "CH1: threshold of the AUTO search %d = middle of the raw signal 1000 (before: 1040, the offset added twice)", m_thr_first);
+        thr = mock_v_to_cnt(P[TRIG_LEVEL_PARAM].value, 1.0, 40);
+        CHECK(thr == 1000, "CH1: threshold of the resulting level %d = 1000 (before: 960, the offset left out)", thr);
+        CHECK(fabsf(P[TRIG_LEVEL_PARAM].value * 8192 - 1040) < 1e-3, "CH1: level %g counts shown = middle of the trace shown (raw + 40 = 1040)",
+              P[TRIG_LEVEL_PARAM].value * 8192);
+        CHECK(fabsf((P[MIN_Y_NORM].value + P[MAX_Y_NORM].value) / 2 * 8192 - 1040) < 1, "CH1: Y range centred on the trace shown (%g .. %g counts)",
+              P[MIN_Y_NORM].value * 8192, P[MAX_Y_NORM].value * 8192);
+        set_signal(0, 0, 0, 1); set_square(1, -3000, -1000, 2000);
+        r = run_auto(&dt);
+        CHECK(r == 0 && P[TRIG_SRC_PARAM].value == 1, "CH2: returns 0, source CH2 (%d, src %g)", r, P[TRIG_SRC_PARAM].value);
+        CHECK(m_thr_first == -2000, "CH2: threshold of the AUTO search %d = -2000 (before: -2025)", m_thr_first);
+        thr = mock_v_to_cnt(P[TRIG_LEVEL_PARAM].value, 1.0, -25);
+        CHECK(thr == -2000, "CH2: threshold of the resulting level %d = -2000 (before: -1975)", thr);
+    }
+
+    printf("T12 AUTO in Raw Mode with a calibration offset (CH1 +40) and a middle on a half count (-2497.5)\n");
+    {
+        static rp_app_params_t Q[PARAMS_NUM+1];
+        float v; int thr;
+        rp_osc_params[DUMMY_OSC_RAW_MODE].value = 1;
+        set_square(0, -3000, -1995, 2000); set_signal(1, 0, 0, 1);
+        r = run_auto(&dt);
+        CHECK(r == 0 && P[TRIG_MODE_PARAM].value == 1, "returns 0, Normal (%d, mode %g)", r, P[TRIG_MODE_PARAM].value);
+        CHECK(m_thr_first == -2498 || m_thr_first == -2497, "threshold of the AUTO search %d = middle of the raw signal", m_thr_first);
+        CHECK(P[TRIG_LEVEL_PARAM].value == -2497, "level %g = -2497: a whole count, Math.round(-2497.5) as the page shows it (before: -2497.5, page -2497.5, scope -2498)",
+              P[TRIG_LEVEL_PARAM].value);
+        memcpy(Q, P, sizeof(Q)); Q[DUMMY_OSC_RAW_MODE].value = 1;
+        v = rp_osc_trig_level_v(Q, 1.0);
+        thr = mock_v_to_cnt(v, 1.0, 40);
+        CHECK(thr == -2497, "threshold written by the acquisition %d = the level shown (-2497)", thr);
+        rp_osc_params[DUMMY_OSC_RAW_MODE].value = 0;
+        calib.fe_ch1_dc_offs = 0; calib.fe_ch2_dc_offs = 0;
+    }
+
+    printf("T13 AUTO in volts mode with a calibrated full scale (max_adc_norm 1.07 V, fe_ch1_fs_g_hi 45956150)\n");
+    {
+        static rp_app_params_t Q[PARAMS_NUM+1];
+        float mn, v, cen; int thr;
+        calib.fe_ch1_fs_g_hi = 45956150;               /* 1.0700 V: the full scale of a factory calibration */
+        mn = osc_fpga_calc_adc_max_v(calib.fe_ch1_fs_g_hi, 0);
+        m_level_never = 0; set_square(0, -1000, 3000, 2000); set_signal(1, 0, 0, 1);
+        r = run_auto(&dt);
+        CHECK(r == 0 && P[TRIG_MODE_PARAM].value == 1, "returns 0, Normal (%d, mode %g)", r, P[TRIG_MODE_PARAM].value);
+        /* acquisition path: rp_osc_trig_level_v() + osc_fpga_update_params() with max_adc_norm */
+        memcpy(Q, P, sizeof(Q));
+        v = rp_osc_trig_level_v(Q, mn);
+        thr = mock_v_to_cnt(v, mn, 0);
+        CHECK(thr == 1000, "threshold written by the acquisition %d = middle of the signal 1000 (before: 935 = 1000 / 1.07)", thr);
+        cen = (P[MIN_Y_NORM].value + P[MAX_Y_NORM].value) / 2 / mn * 8192;
+        CHECK(fabsf(cen - 1000) < 1, "Y range centred on the signal (%g counts; before: 935)", cen);
+        CHECK(fabsf((P[MAX_Y_NORM].value - P[MIN_Y_NORM].value) / mn * 8192 - 4800) < 3,
+              "Y range = 1.2 x the signal, 4800 counts (%g; before: 4486)", (P[MAX_Y_NORM].value - P[MIN_Y_NORM].value) / mn * 8192);
+        set_signal(0, 0, 2000, 1); set_signal(1, 0, 0, 1);
+        r = run_auto(&dt);
+        CHECK(r == 0 && P[TRIG_MODE_PARAM].value == 0 && fabsf((P[MIN_Y_NORM].value + P[MAX_Y_NORM].value) / 2 / mn * 8192 - 1000) < 1,
+              "DC (no signal branch): Y range centred on the middle of both channels, 1000 counts (%g; before: 935)",
+              (P[MIN_Y_NORM].value + P[MAX_Y_NORM].value) / 2 / mn * 8192);
+        calib.fe_ch1_fs_g_hi = 0;
     }
 
     printf("T8 AUTO with a scope that never triggers (dead)\n");

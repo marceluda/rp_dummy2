@@ -1,6 +1,6 @@
 # Remote: remote control of a generated App
 
-> Documented version: rp_dummy2 **2.0.1** (branch `devel2.0`, tag `v2.0.1`). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **2.0.2** (branch `devel2.0`, tag `v2.0.2`). Back to the [README](../README.md).
 > Related: [App.md](App.md) (register map), [Devel.md](Devel.md) (build, upload, safety notes).
 
 Every App made by `new_project.py` can be controlled without its web page, the same way as the lock-in Apps

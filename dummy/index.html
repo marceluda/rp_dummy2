@@ -3777,7 +3777,11 @@
     v = Math.min(Math.max(Number(v), lim[0]), lim[1]);
     return trigRaw(p) ? Math.round(v) : v / trigLevelScale(p);
   }
-  function trigLevelToPage(level, p) { return Number(level) * trigLevelScale(p); }
+  // In Raw Mode the whole count that the scope uses (Math.round, as src/fpga.c osc_fpga_cnv_cnt_to_trig_v(); 2.0.2:
+  // before, a half count from a config file or a remote client was shown as e.g. -2.5 and the scope used -3)
+  function trigLevelToPage(level, p) {
+    return trigRaw(p) ? Math.round(Number(level)) : Number(level) * trigLevelScale(p);
+  }
   // limits of the level in page units: +-gui_reset_y_range/2 V (of q, the server values, if given) or -8192..8191
   function trigLevelLimits(p, q) {
     if(trigRaw(p)) return [-8192, 8191];

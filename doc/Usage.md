@@ -1,6 +1,6 @@
 # Usage: create your own Red Pitaya App
 
-> Documented version: rp_dummy2 **2.0.1** (branch `devel2.0`, tag `v2.0.1`). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **2.0.2** (branch `devel2.0`, tag `v2.0.2`). Back to the [README](../README.md).
 > Related: [App.md](App.md) (what a generated App contains, registers, scope, Verilog modules),
 > [Devel.md](Devel.md) (build and upload), [Remote.md](Remote.md).
 
@@ -56,7 +56,7 @@ Python >= 3.8, standard library only (`new_project.py:25-26`). Run it from the r
 | `--no-icon` | | Do not render the logo: the App uses the generic `resources/logo.png` (the name is still written in `resources/logo.svg`) |
 | `--icon-tool` | `auto` | Tool that renders `resources/logo.svg`: `auto` = the first available of `cairosvg` (Python module), `rsvg-convert` (`librsvg2-bin`), `inkscape` |
 | `-v`, `--verbose` | | Also show the output of `config_tool.py -a` |
-| `--version` | | Print the version of the generator (`rp_dummy2 2.0.1`) |
+| `--version` | | Print the version of the generator (`rp_dummy2 2.0.2`) |
 
 `./new_project.py -h` also lists every key of the `.ini` (§2). The version of the generator is written in the
 `info/info.json` (description), `README.md` and `CHANGELOG.md` of every generated App.
@@ -597,7 +597,8 @@ taken on RP2 (Ecosystem 2.04-35) with rp_dummy2 2.0.1 (`dummy2_test` 0.1.0-14, 2
 ![Ext Trig = Test square sets Source External, Mode Normal: the square wave starts at t = 0](.Usage/ext_trig_external_normal.jpg)
 
 - **AUTO**: looks for a periodic signal and sets the trigger (Normal, channel with signal, level) and a window with a
-  few periods; with a DC signal it sets Mode = Auto. It finishes in a few seconds at most (every wait has a time limit
+  few periods; with a DC signal it sets Mode = Auto. The level is the middle of the signal, a whole number of counts
+  (also with the calibration offsets and full scale of the board, since 2.0.2). It finishes in a few seconds at most (every wait has a time limit
   in the controller, `src/worker.c`; tested on RP2: < 2.5 s, `reportes/dummy2/2026-10-23_cp4_bis_test.md` B6).
 
 ![AUTO in Raw Mode on the sawtooth: Normal / Channel 1, level -2 counts, 0..1.57 ms](.Usage/auto_button_saw.jpg)

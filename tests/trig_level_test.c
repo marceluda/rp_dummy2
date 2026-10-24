@@ -3,6 +3,7 @@
  * fpga.c: osc_fpga_cnv_cnt_to_trig_v() must give the voltage that osc_fpga_cnv_v_to_cnt() (the function that writes
  * the threshold of the scope) turns into exactly the same counts, for every 14-bit level, calibration offset,
  * full scale and user offset. Before, the worker passed the counts as volts: 100 counts -> threshold 8191.
+ * 2.0.2: half counts rounded as the page (Math.round): -2.5 -> -2 (roundf() gave -3).
  *   make -C tests c
  */
 #include <stdio.h>
@@ -35,6 +36,28 @@ int main(void)
     printf("  %s: %d levels x full scales x offsets -> the same counts in the threshold register (%d failures; "
            "%d beyond the full scale with the user/calibration offset, saturated as in volts mode)\n",
            fails ? "FAIL" : "PASS", n, fails, clamped);
+    /* 2.0.2: half counts (the level of an AUTO in Raw Mode of 2.0.1, a config file, a remote client) are rounded as the
+     * page shows them, Math.round (halves up): -2.5 -> -2, 2.5 -> 3. Before, roundf(): -2.5 -> -3 (page "-2") */
+    {
+        static const float half[] = { -2.5f, 2.5f, -0.5f, 0.5f, -2497.5f, 8190.5f, -8191.5f, -2.4f, -2.6f };
+        int h, hf = 0;
+        for(h = 0; h < (int)(sizeof(half) / sizeof(half[0])); h++)
+            for(b = 0; b < 3; b++) {
+                int want = (int)floorf(half[h] + 0.5f);              /* Math.round() of the page */
+                float v  = osc_fpga_cnv_cnt_to_trig_v(half[h], 1.0f, calib[b], 0.0f);
+                int   r  = osc_fpga_cnv_v_to_cnt(v, 1.0f, calib[b], 0.0f);
+                if(want + calib[b] > 8191 || want + calib[b] < -8192)
+                    continue;                                          /* saturated, as above */
+                if((r & 0x3FFF) != (want & 0x3FFF)) {
+                    hf++;
+                    printf("  FAIL: %g counts (calib %d) -> threshold %d, the page shows %d\n", half[h], calib[b],
+                           (r & 0x2000) ? (r & 0x3FFF) - 0x4000 : (r & 0x3FFF), want);
+                }
+            }
+        printf("  %s: half counts -> the threshold is the count shown by the page (Math.round; %d failures)\n",
+               hf ? "FAIL" : "PASS", hf);
+        fails += hf;
+    }
     old = osc_fpga_cnv_v_to_cnt(100.0f, 1.0f, 0, 0.0f);
     printf("  PASS: (reference) the old path, 100 counts taken as 100 V, gives %d\n", old);
     if(fails == 0 && old == 8191) { printf("ALL PASS (0 failures)\n"); return 0; }

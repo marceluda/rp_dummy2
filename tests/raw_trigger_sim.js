@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// rp_dummy2 2.0.1 (CP6.1): units of the trigger level in the web page, Raw Mode in ADC counts.
+// rp_dummy2 2.0.1 (CP6.1): units of the trigger level in the web page, Raw Mode in ADC counts (2.0.2: half counts, section 7).
 // Before, the page converted the level with the volts scale also in Raw Mode and limited it to +-gui_reset_y_range/2
 // (+-1): a level of 100 counts was sent as 100 (then taken as 100 V by the controller: threshold 8191) and shown as 1.
 // Real functions of index.html: the [RAW TRIGGER] block (trigRaw, trigLevelScale, pageToTrigLevel, trigLevelToPage,
@@ -107,6 +107,21 @@ check('6.8 the Level units label follows Raw Mode (counts / V)', /trig_lev_units
 check('6.9 switching Raw Mode converts the Y axis (yRangeForRaw), no delayed autoscale with the old trace',
       /yRangeForRaw\(/.test(fnSrc('display_update')) && !/setTimeout\(autoscaleY/.test(js));
 check('6.10 the level box and the slider drag pass the server limits', (js.match(/pageToTrigLevel\([^;]*params\.original\)/g) || []).length >= 2);
+
+// 7. 2.0.2: a half count (an AUTO of 2.0.1, a config file, a remote client) is shown as the whole count that the scope
+// uses: Math.round (halves up), the same rule as osc_fpga_cnv_cnt_to_trig_v() of src/fpga.c (floorf(x + 0.5f)).
+// Before, -2.5 was shown as "-2.5" (line and slider at -2.5) and the controller wrote -3 (roundf).
+{
+  const cRound = x => Math.floor(x + 0.5);          // src/fpga.c
+  const vals = [-2.5, 2.5, -0.5, 0.5, -2.4, -2.6, 8190.5, -8191.5, 100];
+  check('7.1 raw: the level shown is the whole count of the controller (-2.5 -> -2, 2.5 -> 3, -0.5 -> 0)',
+        vals.every(v => F('trigLevelToPage')(v, R) === cRound(v)), vals.map(v => F('trigLevelToPage')(v, R)).join(' '));
+  check('7.2 raw: the level box shows "-2" for a level of -2.5', F('roundLevel')(F('trigLevelToPage')(-2.5, R)) === -2,
+        F('roundLevel')(F('trigLevelToPage')(-2.5, R)));
+  check('7.3 volts: not rounded (0.00030517578125 V stays)', F('trigLevelToPage')(2.5 / 8192, V) === 2.5 / 8192);
+  check('7.4 raw: page -> param -> page keeps the whole count (Math.round both ways)',
+        vals.every(v => F('trigLevelToPage')(F('pageToTrigLevel')(v, R), R) === cRound(v)));
+}
 
 // 5. config load (CP6.1 O2): keys unknown to this App are not sent (the controller logged "not found")
 {

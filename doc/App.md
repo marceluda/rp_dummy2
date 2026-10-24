@@ -1,6 +1,6 @@
 # App: what a generated App contains
 
-> Documented version: rp_dummy2 **2.0.1** (branch `devel2.0`, tag `v2.0.1`). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **2.0.2** (branch `devel2.0`, tag `v2.0.2`). Back to the [README](../README.md).
 > Related: [Usage.md](Usage.md) (how to create an App and use its web page), [Devel.md](Devel.md) (build, upload).
 
 Every App made by `new_project.py` is the template `dummy/` with your controls added. This page describes the fixed
@@ -234,7 +234,7 @@ zooms between 20 ns and 68.7 s (`index.html:2292`). Verified on RP2 from 131 µs
 | Mode (`trig_mode`) | 0 Auto, 1 Normal, 2 Single | Auto: free running when there is no trigger |
 | Source (`trig_source`) | 0 Channel 1, 1 Channel 2, 2 External | |
 | Edge (`trig_edge`) | 0 rising, 1 falling | Also for External |
-| Level (`trig_level`) | V in the page (normalized volts × scale of the channel); **ADC counts in Raw Mode** | Channel sources. The scope compares 14-bit counts: in Raw Mode the controller writes the counts as they are (`rp_osc_trig_level_v()`, `src/worker.c:261`; before 2.0.1 they were taken as volts and saturated at ±8191). Switching Raw Mode converts the level in the page |
+| Level (`trig_level`) | V in the page (normalized volts × scale of the channel); **ADC counts in Raw Mode** | Channel sources. The scope compares 14-bit counts: in Raw Mode the controller writes the counts as they are (`rp_osc_trig_level_v()`, `src/worker.c:261`; before 2.0.1 they were taken as volts and saturated at ±8191). In Raw Mode the level is a whole count: the page shows and sends it rounded with `Math.round` (halves up) and `osc_fpga_cnv_cnt_to_trig_v()` rounds the same way (2.0.2; before, −2.5 was shown as −2.5 and written as −3). Switching Raw Mode converts the level in the page |
 
 Pre-trigger: windows with negative times show samples before the trigger (only those really acquired since the arm,
 `we_cnt`). Scope parameters that do not change the acquisition (e.g. your controls) do not re-arm it, so a step made
@@ -242,7 +242,12 @@ from the page can trigger a waiting Normal acquisition (`reportes/dummy2/2026-10
 
 **AUTO** (auto-set, `src/worker.c`): looks for a signal in both channels, sets Normal on the channel that has it, the
 level and a window with some periods, among the 10 time ranges; with a DC signal it sets Auto. In Raw Mode the level
-and the Y range are in counts. Every wait has a time limit (it cannot hang the App or nginx; host regression test
+and the Y range are in counts. The level is the middle of the signal rounded to a whole count; in volts mode the
+calibration offset of the channel is counted once, so the threshold of the scope is the middle of the raw samples both
+during the search and in the resulting level (2.0.2: before, the search used a threshold one calibration offset above
+the middle and the resulting level was one offset below it). In volts mode the level and the Y range are stored as
+counts × `max_adc_norm` / 8192, the scale the acquisition and the page use (2.0.2: before counts / 8192, off with a
+calibrated full scale other than 1 V). Every wait has a time limit (it cannot hang the App or nginx; host regression test
 `tests/auto_set_harness.c`).
 
 ### External trigger
