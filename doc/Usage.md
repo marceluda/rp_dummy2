@@ -543,7 +543,7 @@ oscA_sw          0x000   2 in2
 The page of a generated App is the same for every App; only the **Dummy** and **Monitor** panels depend on the `.ini`.
 The screenshots below are from the test App `dummy2_test` (the controls of `config.ini` plus test logic in `dummy.v`:
 an internal sawtooth `test_saw` and square wave `test_sq` on Osc A/B inputs 5/6, and the square as an Ext Trig source),
-taken on RP2 (Ecosystem 2.04-35) during the tests of CP4 and CP4_bis (`reportes/dummy2/`).
+taken on RP2 (Ecosystem 2.04-35) with rp_dummy2 2.0.1 (`dummy2_test` 0.1.0-14, 2026-10-24).
 
 ![Web UI: Oscilloscope, Outputs and Dummy panels on the left, plot, Trigger and Range on the right](.Usage/ui_overview_test_saw_square.jpg)
 
@@ -584,7 +584,7 @@ taken on RP2 (Ecosystem 2.04-35) during the tests of CP4 and CP4_bis (`reportes/
 - **Raw Mode**: Y axis and monitors in integer counts (8192 counts = 1 V for the 14-bit signals); the Y axis autoscales
   when it is toggled.
 
-![Reset zoom in Raw Mode: 0..1049 µs, Y -8192..8192](.Usage/reset_zoom_raw_mode.jpg)
+![Reset zoom in Raw Mode: one memory at the current decimation (0..8.4 ms), Y -8192..8192 counts, trigger level and monitor B in counts](.Usage/reset_zoom_raw_mode.jpg)
 
 - **Trigger**: Auto (free running when there is no trigger), Normal (waits for the trigger), Single (one acquisition,
   armed with the Single button). Level in V, or in ADC counts in Raw Mode (-8192..8191, the unit next to the box says
@@ -600,12 +600,13 @@ taken on RP2 (Ecosystem 2.04-35) during the tests of CP4 and CP4_bis (`reportes/
   few periods; with a DC signal it sets Mode = Auto. It finishes in a few seconds at most (every wait has a time limit
   in the controller, `src/worker.c`; tested on RP2: < 2.5 s, `reportes/dummy2/2026-10-23_cp4_bis_test.md` B6).
 
-![AUTO on the sawtooth: Normal / Channel 1, 0..1.57 ms](.Usage/auto_button_saw.jpg)
+![AUTO in Raw Mode on the sawtooth: Normal / Channel 1, level -2 counts, 0..1.57 ms](.Usage/auto_button_saw.jpg)
 
 - Long windows: at decimation 524288 one acquisition lasts about 69 s; the trace grows from the left while it is
-  acquired.
+  acquired. The last X+ step is 50 s; **Reset zoom** at that decimation shows the whole 0..69 s memory (seen on RP2,
+  2026-10-24).
 
-![60 s window](.Usage/range_60s.jpg)
+![Longest window: Reset zoom at decimation 524288, 0..69 s (in1 and the test square)](.Usage/range_60s.jpg)
 
 ### 6.4 Configurations and page state
 
@@ -615,4 +616,4 @@ taken on RP2 (Ecosystem 2.04-35) during the tests of CP4 and CP4_bis (`reportes/
 - Ecosystem 2.0 details handled by the page: parameters are sent in POSTs of at most 600 bytes (`index.html` l. 65),
   with retries; `index.html` is not cached (`nginx.conf`).
 
-![Config dialog](.Usage/config_modal.jpg)
+![Config dialog: name, Save in browser / Save as file, Load file, and the table of saved configurations](.Usage/config_modal.jpg)
