@@ -184,7 +184,6 @@
   load_config_block_start=1;
 
   set_trigger_val=false;
-  trigger_just_set=false;
   last_disp_units=false;
   var monitor_bar_tsp = 0;               // [ms] last update of the monitor bars (every 300 ms)
   var last_raw_mode;                     // Raw Mode state shown in the Y axis title
@@ -192,9 +191,8 @@
   // List of params to save/load
   config_params_txts = 'xmin,xmax,trig_mode,trig_source,trig_edge,trig_delay,trig_level,time_range,time_units,en_avg_at_dec,min_y,'+
                        'max_y,prb_att_ch1,gain_ch1,prb_att_ch2,gain_ch2,gui_xmin,gui_xmax,'+
-                       'dummy_oscA_sw,dummy_oscB_sw,dummy_osc1_filt_off,dummy_osc2_filt_off,dummy_osc_raw_mode,dummy_osc_lockin_mode,'+
-                       'dummy_trig_sw,dummy_out1_sw,dummy_out2_sw,dummy_slow_out1_sw,dummy_slow_out2_sw,dummy_slow_out3_sw,dummy_slow_out4_sw,'+
-                       'dummy_read_ctrl';
+                       'dummy_oscA_sw,dummy_oscB_sw,dummy_osc1_filt_off,dummy_osc2_filt_off,dummy_osc_raw_mode,dummy_trig_sw,dummy_out1_sw,'+
+                       'dummy_out2_sw,dummy_slow_out1_sw,dummy_slow_out2_sw,dummy_slow_out3_sw,dummy_slow_out4_sw,dummy_read_ctrl';
 
   config_params_keys = config_params_txts.split(",");
 
@@ -1321,7 +1319,7 @@
 
 
     // Buttons
-    var input_buttons = '#dummy_osc_raw_mode,#dummy_osc_lockin_mode';
+    var input_buttons = '#dummy_osc_raw_mode';
     $(input_buttons).on('click', function() {
       $(this).toggleClass('btn-default btn-primary');
       params.local[this.id] = ($(this).is('.btn-primary') ? 1 : 0);
@@ -1335,25 +1333,6 @@
       sendParams();
     });
 
-
-    // More Switches
-    $('#dummy_ctrl_aux_trig_type').on('change', function() { onDropdownChange($(this), 'lock_ctrl_aux_trig_type'); });
-
-    $('#dummy_mod_sq_on').on('click', function() {
-            $('#dummy_mod_sq_on').toggleClass('btn-default btn-primary');
-            $("div[data-tag='SquareParams']").toggleClass('in collapse') ;
-        });
-
-    $('#dummy_mod_harmonic_on').on('click', function() {
-            $('#dummy_mod_harmonic_on').toggleClass('btn-default btn-primary');
-            $("div[data-tag='HarmonicParams']").toggleClass('in collapse') ;
-        });
-
-    /* LOLO load_config_block_start: its checkbox (lock-in template) was removed: no PIDs/ramp in this App */
-    $('#load_config_block_start').on('change', function() {
-      load_config_block_start = ($(this).is(':checked') ? 1 : 0);
-    });
-    // */
 
     $('#btn_stop')
       .on('click', function() {
@@ -1435,45 +1414,12 @@
     // #btn_set_trig (set_trigger_val), which does not exist in this App.
 
 
-    // dummy_update();
-    /* ERASE LOLO
-    lock_ramp_step_update();
-    lock_modulation_update();
-    lock_ctrl_update();
-    lock_pidA_update();
-    lock_pidB_update();
-    lpf_update();
-    */
 
     $('[data-toggle="tooltip"]').tooltip({container: 'body'});
-
-    $('option[data-tag=pidA_more]').hide();
-    $('option[data-tag=pidB_more]').hide();
 
     $('#btn_config_load_file')[0].addEventListener('change', config_load_file, false);
 
     $('#config_name_input').on('change', function() {  config_save_file();  });
-
-    $(document).on('click', '#Fnavtabs .nav-tabs li', function() {
-        $(".nav-tabs li").removeClass("active");
-        $(this).addClass("active");
-        //$('#slow_lock_in_hide div.row[id!="tab_header"]').hide();
-        $('#tab_F1_body,#tab_F2_body,#tab_F3_body').hide();
-        var tab_name = $(this).text().slice(-2) ;
-        //console.log(tab_name);
-        $('#tab_'+tab_name+'_body').show();
-
-    });
-
-
-    $('label[for="dummy_ramp_step"]').on('click', function() {
-      showModalHelp("<p>Ramp period param sets the number of clock ticks the ramp control waits before jumping the next ramp value.</p>"+
-                    "<p>The ramp signals goes one <tt>int</tt> up/down after <tt>ramp_step</tt> clock ticks. The name of this control"+
-                    "is just to remember that it sets up the total period of the ramp function. The total period will depend on "+
-                    "<tt>ramp_low_lim</tt> and <tt>ramp_hig_lim</tt> either.</p>");
-      });
-
-
 
     // Load first data
     claimBoard().always(resumeApp);  // Claim, then probe which App is loaded before any GET /data
@@ -1490,515 +1436,6 @@
 
 
   var units={ "-4": 'p', "-3": 'n', "-2": 'u', "-1": 'm', "0": '&nbsp;', "1": 'k', "2": 'M', "3": 'G', "4": 'T' };
-  var magni={ "-4": '×10<sup>-12</sup>',"-3": '×10<sup>-9</sup>', "-2": '×10<sup>-6</sup>', "-1": '×10<sup>-3</sup>',
-              "0": ' ',
-              "1": '×10<sup>3</sup>', "2": '×10<sup>6</sup>', "3": '×10<sup>9</sup>', "4": '×10<sup>12</sup>' };
-
-  function lock_ramp_step_update() {
-
-    ramp_step_arr          = $("#dummy_ramp_step"    ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_ramp_low_lim_arr  = $("#dummy_ramp_low_lim" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_ramp_hig_lim_arr  = $("#dummy_ramp_hig_lim" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_ramp_B_factor_arr = $("#dummy_ramp_B_factor").val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-
-    if( !$.isNumeric(ramp_step_arr[0]) ||
-        !$.isNumeric(lock_ramp_low_lim_arr[0]) ||
-        !$.isNumeric(lock_ramp_hig_lim_arr[0]) ||
-        !$.isNumeric(lock_ramp_B_factor_arr[0])
-        ) return -1 ;
-
-    if (params) if (params.local)
-    if( parseLocalFloat(ramp_step_arr[0])          == ramp_step  &&
-        parseLocalFloat(lock_ramp_low_lim_arr[0])  == lock_ramp_low_lim &&
-        parseLocalFloat(lock_ramp_hig_lim_arr[0])  == lock_ramp_hig_lim &&
-        parseLocalFloat(lock_ramp_B_factor_arr[0]) == lock_ramp_B_factor
-        ) return -1 ;
-
-    ramp_step          = Math.abs( parseLocalFloat( ramp_step_arr[0] ) );
-    lock_ramp_low_lim  = parseLocalFloat( lock_ramp_low_lim_arr[0]  ) ;
-    lock_ramp_hig_lim  = parseLocalFloat( lock_ramp_hig_lim_arr[0]  ) ;
-    lock_ramp_B_factor = parseLocalFloat( lock_ramp_B_factor_arr[0] ) ;
-
-    if( lock_ramp_low_lim_arr.length === 2) {
-      if ( lock_ramp_low_lim_arr[1].toLowerCase()=="v" )
-        lock_ramp_low_lim = Math.round( lock_ramp_low_lim * 8192 );
-      if ( lock_ramp_low_lim_arr[1].toLowerCase()=="mv" )
-        lock_ramp_low_lim = Math.round( lock_ramp_low_lim * 8192 /1000 );
-      lock_ramp_low_lim = Math.min(  8191 , lock_ramp_low_lim  ) ;
-      lock_ramp_low_lim = Math.max( -8192 , lock_ramp_low_lim  ) ;
-      $("#dummy_ramp_low_lim").val(""+lock_ramp_low_lim);
-    }
-
-    if( lock_ramp_hig_lim_arr.length === 2) {
-      if ( lock_ramp_hig_lim_arr[1].toLowerCase()=="v" )
-        lock_ramp_hig_lim = Math.round( lock_ramp_hig_lim * 8192 );
-      if ( lock_ramp_hig_lim_arr[1].toLowerCase()=="mv" )
-        lock_ramp_hig_lim = Math.round( lock_ramp_hig_lim * 8192 /1000 );
-      lock_ramp_hig_lim = Math.min(  8191 , lock_ramp_hig_lim  ) ;
-      lock_ramp_hig_lim = Math.max( -8192 , lock_ramp_hig_lim  ) ;
-      $("#dummy_ramp_hig_lim").val(""+lock_ramp_hig_lim);
-    }
-
-    if ( lock_ramp_low_lim > lock_ramp_hig_lim ) {
-      lock_ramp_low_lim = lock_ramp_hig_lim;
-      $("#dummy_ramp_low_lim").val(""+lock_ramp_low_lim);
-    }
-
-    if( ramp_step_arr.length === 2) {
-      if ( ramp_step_arr[1].toLowerCase()=="s"  ||  ramp_step_arr[1].toLowerCase()=="seg" )
-        ramp_step = ramp_step / 8e-9 / Math.abs(lock_ramp_hig_lim - lock_ramp_low_lim) ;
-      if ( ramp_step_arr[1].toLowerCase()=="ms" )
-        ramp_step = Math.round( ramp_step / 8e-9 / 1000 / Math.abs(lock_ramp_hig_lim - lock_ramp_low_lim) );
-      $("#dummy_ramp_step").val(""+ramp_step);
-    }
-
-
-    period = (lock_ramp_hig_lim - lock_ramp_low_lim) * (ramp_step+1) * 8e-9 * 2;
-
-    if ( period === 0 ){
-      txt=" OFF ";
-    }else{
-      oom = Math.floor(Math.log10(period)/3);
-      val = period/Math.pow(10,3*oom);
-      txt = "<small><b>&tau;&nbsp;=&nbsp;" + val.toFixed(2) + "&nbsp;" + units[oom.toString()] + "s</b>";
-
-      oom  = Math.floor(Math.log10(1/period)/3);
-      val  = (1/period)/Math.pow(10,3*oom);
-      txt += " <br> <b>f&nbsp;=&nbsp;" + val.toFixed(2) + "&nbsp;" + units[oom.toString()] + "Hz</b></small>";
-    }
-
-    $('#dummy_ramp_step_text').html( txt   );
-
-    $('#dummy_ramp_low_lim_text').html( "<small><b>" + (lock_ramp_low_lim/8192*1000).toFixed(0) + "&nbsp;mV</b></small>" );
-    $('#dummy_ramp_hig_lim_text').html( "<small><b>" + (lock_ramp_hig_lim/8192*1000).toFixed(0) + "&nbsp;mV</b></small>" );
-
-    txt  =  "<p><b>" + ( (lock_ramp_hig_lim - lock_ramp_low_lim)/8192*1000 ).toFixed(0) + "&nbsp;mVpp</b>" ;
-    txt +=  " <br> " ;
-    txt +=  "<b>" + ( (lock_ramp_hig_lim + lock_ramp_low_lim)/2/8192*1000 ).toFixed(1) + "&nbsp;mVdc</b></p>" ;
-    $('#dummy_ramp_text').html( txt );
-
-    $('#dummy_ramp_B_factor_text').html( "<small><b>" + (lock_ramp_B_factor/4096).toFixed(5) + "</b></small>" );
-  }
-
-  function lpf_update(){
-
-    var lpfs={0:'lock_lpf_F1_tau'   , 1:'lock_lpf_F2_tau'  , 2:'lock_lpf_F3_tau'  , 3:'lock_lpf_sq_tau',
-              4:'lock_lpf_F1_order' , 5:'lock_lpf_F2_order', 6:'lock_lpf_F3_order', 7:'lock_lpf_sq_order'   };
-
-    if (params.local){
-        for ( i in lpfs){
-          // A <select> without selection (val() null) gives NaN: keep params.local and show its value again
-          var lv = parseInt($('#'+lpfs[i]).val());
-          if(isFinite(lv)) params.local[lpfs[i]] = lv;
-          else if(isSendable(params.local[lpfs[i]])) $('#'+lpfs[i]).val(params.local[lpfs[i]]);
-        }
-
-        sendParams(true);
-
-        for ( i in lpfs){
-          $('#'+lpfs[i]        ).blur();
-        }
-    }
-    user_editing = false;
-  }
-
-
-  function lock_pidA_update(){
-    // Get inputs text values
-    /* DISABLED BY LOLO
-    lock_pidA_sp_arr = $("#dummy_pidA_sp" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_pidA_kp_arr = $("#dummy_pidA_kp" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_pidA_ki_arr = $("#dummy_pidA_ki" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_pidA_kd_arr = $("#dummy_pidA_kd" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-
-    // Check if inputs are numbers
-    if( !$.isNumeric(lock_pidA_sp_arr[0]) ||
-        !$.isNumeric(lock_pidA_kp_arr[0]) ||
-        !$.isNumeric(lock_pidA_ki_arr[0]) ||
-        !$.isNumeric(lock_pidA_kd_arr[0])    ) return -1 ;
-
-    // Check if values changed from last execution. We don't want to update DIVs constantly but only
-    // when there are changes (to save processor time / resources)
-    if (params) if (params.local)
-    if( parseInt(lock_pidA_sp_arr[0])         == pidA_sp &&
-        parseInt(lock_pidA_kp_arr[0])         == pidA_kp &&
-        parseInt(lock_pidA_ki_arr[0])         == pidA_ki &&
-        parseInt(lock_pidA_kd_arr[0])         == pidA_kd &&
-        parseInt(params.local.dummy_pidA_PSR ) == parseInt($("#dummy_pidA_PSR" ).val()) &&
-        parseInt(params.local.dummy_pidA_ISR ) == parseInt($("#dummy_pidA_ISR" ).val()) &&
-        parseInt(params.local.dummy_pidA_DSR ) == parseInt($("#dummy_pidA_DSR" ).val()) &&
-        parseInt(params.local.dummy_pidA_SAT ) == parseInt($("#dummy_pidA_SAT" ).val())
-        ) return -1 ;
-
-    // Get number values
-    pidA_sp = parseInt( lock_pidA_sp_arr[0] ) ;
-    pidA_kp = parseInt( lock_pidA_kp_arr[0] ) ;
-    pidA_ki = parseInt( lock_pidA_ki_arr[0] ) ;
-    pidA_kd = parseInt( lock_pidA_kd_arr[0] ) ;
-
-    // If there is a text that sets units, process the correct unit and number value
-    if( lock_pidA_sp_arr.length === 2) {
-      if ( lock_pidA_sp_arr[1].toLowerCase()=="v" )
-        pidA_sp = Math.round( pidA_sp * 8192 );
-      if ( lock_pidA_sp_arr[1].toLowerCase()=="mv" )
-        pidA_sp = Math.round( pidA_sp * 8192 /1000 );
-      pidA_sp = Math.min(  8191 , pidA_sp  ) ;
-      pidA_sp = Math.max( -8192 , pidA_sp  ) ;
-      $("#dummy_pidA_sp").val(""+pidA_sp);
-    }
-
-    // Update text labels with correct info values
-
-    var isrval=[0,3,6,10,13,16,20,23,26,30];
-    var psrval=[0,3,6,10,12];
-
-    // Integration part
-    tau=8e-9 * 2**isrval[parseInt($('#dummy_pidA_ISR').val())] / Math.abs( pidA_ki )  ;
-    if ( pidA_ki === 0 ){
-      txt='<div class="col-xs-12" ><small><b>OFF</b></small></div>';
-    }else{
-      oom = Math.floor(Math.log10(tau)/3);
-      val = tau/Math.pow(10,3*oom);
-      txt = '<div class="col-xs-12 col-md-6" ><small><b>&tau;&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 's</b></small></div>';
-
-      oom  = Math.floor(Math.log10(1/tau)/3);
-      val  = (1/tau)/Math.pow(10,3*oom);
-      //txt += '<br class="visible-xs visible-sm">';
-      txt += '<div class="col-xs-12 col-md-6" ><small><b>f&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 'Hz</b></small></div>';
-    }
-    $('#dummy_pidA_ki_text').html( txt   );
-
-    // Derivative part
-    tau=8e-9 * Math.pow(2,parseInt($('#dummy_pidA_DSR').val())-6) * Math.abs(pidA_kd*60) ;
-    if ( pidA_kd === 0 ){
-      txt='<div class="col-xs-12" ><small><b>OFF</b></small></div>';
-    }else{
-      oom = Math.floor(Math.log10(tau)/3);
-      val = tau/Math.pow(10,3*oom);
-      txt = '<div class="col-xs-12 col-md-6" ><small><b>&tau;&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 's</b></small></div>';
-
-      oom  = Math.floor(Math.log10(1/tau)/3);
-      val  = (1/tau)/Math.pow(10,3*oom);
-      //txt += '<br class="visible-xs visible-sm">';
-      txt += '<div class="col-xs-12 col-md-6" ><small><b>f&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 'Hz</b></small></div>';
-    }
-    $('#dummy_pidA_kd_text').html( txt   );
-
-    // Proportional part
-    mult= Math.abs(pidA_kp) / ( 2**psrval[parseInt($('#dummy_pidA_PSR').val())] ) ;
-    if ( pidA_kp === 0 ){
-      txt="0";
-    }else{
-      oom = Math.min( 0 , Math.ceil(Math.log10(mult)/3) );
-      val = Math.sign(pidA_kp)*mult/(Math.pow(10,3*oom));
-      txt = "&nbsp;" + val.toFixed(3) + "&nbsp;" + magni[oom.toString()] ;
-    }
-
-    $('#dummy_pidA_kp_text').html( '<div class="col-xs-12" ><small><b>'+txt+'</b></small></div>'   );
-
-    // set - point
-    setpoint=Math.round(pidA_sp / 8191*1000*100 )/100 ;
-    $('#dummy_pidA_sp_text').html( "<small><b>"+setpoint.toFixed(2)+"&nbsp;mV</b></small>"   );
-    */
-    return 0;
-  }
-
-  function lock_pidB_update(){
-    /* DISABLED BY LOLO
-    // Get inputs text values
-    lock_pidB_sp_arr = $("#dummy_pidB_sp" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_pidB_kp_arr = $("#dummy_pidB_kp" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_pidB_ki_arr = $("#dummy_pidB_ki" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_pidB_kd_arr = $("#dummy_pidB_kd" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-
-    // Check if inputs are numbers
-    if( !$.isNumeric(lock_pidB_sp_arr[0]) ||
-        !$.isNumeric(lock_pidB_kp_arr[0]) ||
-        !$.isNumeric(lock_pidB_ki_arr[0]) ||
-        !$.isNumeric(lock_pidB_kd_arr[0])    ) return -1 ;
-
-    // Check if values changed from last execution. We don't want to update DIVs constantly but only
-    // when there are changes (to save processor time / resources)
-    if (params) if (params.local)
-    if( parseInt(lock_pidB_sp_arr[0])         == pidB_sp &&
-        parseInt(lock_pidB_kp_arr[0])         == pidB_kp &&
-        parseInt(lock_pidB_ki_arr[0])         == pidB_ki &&
-        parseInt(lock_pidB_kd_arr[0])         == pidB_kd &&
-        parseInt(params.local.dummy_pidB_PSR ) == parseInt($("#dummy_pidB_PSR" ).val()) &&
-        parseInt(params.local.dummy_pidB_ISR ) == parseInt($("#dummy_pidB_ISR" ).val()) &&
-        parseInt(params.local.dummy_pidB_DSR ) == parseInt($("#dummy_pidB_DSR" ).val()) &&
-        parseInt(params.local.dummy_pidB_SAT ) == parseInt($("#dummy_pidB_SAT" ).val())
-        ) return -1 ;
-
-    // Get number values
-    pidB_sp = parseInt( lock_pidB_sp_arr[0] ) ;
-    pidB_kp = parseInt( lock_pidB_kp_arr[0] ) ;
-    pidB_ki = parseInt( lock_pidB_ki_arr[0] ) ;
-    pidB_kd = parseInt( lock_pidB_kd_arr[0] ) ;
-
-    // If there is a text that sets units, process the correct unit and number value
-    if( lock_pidB_sp_arr.length === 2) {
-      if ( lock_pidB_sp_arr[1].toLowerCase()=="v" )
-        pidB_sp = Math.round( pidB_sp * 8192 );
-      if ( lock_pidB_sp_arr[1].toLowerCase()=="mv" )
-        pidB_sp = Math.round( pidB_sp * 8192 /1000 );
-      pidB_sp = Math.min(  8191 , pidB_sp  ) ;
-      pidB_sp = Math.max( -8192 , pidB_sp  ) ;
-      $("#dummy_pidB_sp").val(""+pidB_sp);
-    }
-
-    // Update text labels with correct info values
-
-    var isrval=[0,3,6,10,13,16,20,23,26,30];
-    var psrval=[0,3,6,10,12];
-
-    // Integration part
-    tau=8e-9 * 2**isrval[parseInt($('#dummy_pidB_ISR').val())] / Math.abs( pidB_ki )  ;
-    if ( pidB_ki === 0 ){
-      txt='<div class="col-xs-12" ><small><b>OFF</b></small></div>';
-    }else{
-      oom = Math.floor(Math.log10(tau)/3);
-      val = tau/Math.pow(10,3*oom);
-      txt = '<div class="col-xs-12 col-md-6" ><small><b>&tau;&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 's</b></small></div>';
-
-      oom  = Math.floor(Math.log10(1/tau)/3);
-      val  = (1/tau)/Math.pow(10,3*oom);
-      //txt += '<br class="visible-xs visible-sm">';
-      txt += '<div class="col-xs-12 col-md-6" ><small><b>f&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 'Hz</b></small></div>';
-    }
-    $('#dummy_pidB_ki_text').html( txt   );
-
-    // Derivative part
-    tau=8e-9 * Math.pow(2,parseInt($('#dummy_pidB_DSR').val())-6) * Math.abs(pidA_kd*60) ;
-    if ( pidB_kd === 0 ){
-      txt='<div class="col-xs-12" ><small><b>OFF</b></small></div>';
-    }else{
-      oom = Math.floor(Math.log10(tau)/3);
-      val = tau/Math.pow(10,3*oom);
-      txt = '<div class="col-xs-12 col-md-6" ><small><b>f&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 's</b></small></div>';
-
-      oom  = Math.floor(Math.log10(1/tau)/3);
-      val  = (1/tau)/Math.pow(10,3*oom);
-      //txt += '<br class="visible-xs visible-sm">';
-      txt += '<div class="col-xs-12 col-md-6" ><small><b>f&nbsp;=&nbsp;' + val.toPrecision(3) + '&nbsp;' + units[oom.toString()] + 'Hz</b></small></div>';
-    }
-    $('#dummy_pidB_kd_text').html( txt   );
-
-    // Proportional part
-    mult= Math.abs(pidB_kp) / ( 2**psrval[parseInt($('#dummy_pidB_PSR').val())] ) ;
-    if ( pidB_kp === 0 ){
-      txt="0";
-    }else{
-      oom = Math.min( 0 , Math.ceil(Math.log10(mult)/3) );
-      val = Math.sign(pidB_kp)*mult/(Math.pow(10,3*oom));
-      txt = "&nbsp;" + val.toFixed(3) + "&nbsp;" + magni[oom.toString()] ;
-    }
-
-    $('#dummy_pidB_kp_text').html( '<div class="col-xs-12" ><small><b>'+txt+'</b></small></div>'   );
-
-    // set - point
-    setpoint=Math.round(pidB_sp / 8191*1000*100 )/100 ;
-    $('#dummy_pidB_sp_text').html( "<small><b>"+setpoint.toFixed(2)+"&nbsp;mV</b></small>"   );
-    */
-    return 0;
-  }
-
-  function lock_modulation_update() {
-    /* DISABLED BY LOLO
-    lock_gen_mod_phase_arr    = $("#dummy_gen_mod_phase"    ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_gen_mod_phase_sq_arr = $("#dummy_gen_mod_phase_sq" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_gen_mod_hp_arr       = $("#dummy_gen_mod_hp"       ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_gen_mod_sqp_arr      = $("#dummy_gen_mod_sqp"      ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-
-
-
-    if( !$.isNumeric(lock_gen_mod_phase_arr[0])    ||
-        !$.isNumeric(lock_gen_mod_phase_sq_arr[0]) ||
-        !$.isNumeric(lock_gen_mod_hp_arr[0])       ||
-        !$.isNumeric(lock_gen_mod_sqp_arr[0])
-        ) return -1 ;
-
-    if (params) if (params.local)
-    if( parseLocalFloat(lock_gen_mod_phase_arr[0])    == mod_phase     &&
-        parseLocalFloat(lock_gen_mod_phase_sq_arr[0]) == mod_phase_sq  &&
-        parseLocalFloat(lock_gen_mod_hp_arr[0])       == mod_hp        &&
-        parseLocalFloat(lock_gen_mod_sqp_arr[0])      == mod_sqp
-        ) return -1 ;
-
-    mod_phase    = Math.abs( parseLocalFloat( lock_gen_mod_phase_arr[0] ) );
-    mod_phase_sq = Math.abs( parseLocalFloat( lock_gen_mod_phase_sq_arr[0] ) );
-    mod_hp       = Math.abs( parseLocalFloat( lock_gen_mod_hp_arr[0]   ) );
-    mod_sqp      = Math.abs( parseLocalFloat( lock_gen_mod_sqp_arr[0]  ) );
-
-    if( lock_gen_mod_phase_arr.length === 2) {
-      if ( lock_gen_mod_phase_arr[1].toLowerCase()=="g" || lock_gen_mod_phase_arr[1].toLowerCase()=="deg" || lock_gen_mod_phase_arr[1].toLowerCase()=="°" )
-        mod_phase = Math.round( (mod_phase % 360 ) / 360 * 2520 );
-      if ( lock_gen_mod_phase_arr[1].toLowerCase()=="rad" )
-        mod_phase = Math.round( ( mod_phase % (2*Math.PI) ) / (2*Math.PI) * 2520 );
-      if ( lock_gen_mod_phase_arr[1].toLowerCase()=="pi" )
-        mod_phase = Math.round( mod_phase / 2  * 2520 );
-      mod_phase = Math.min(  2520 , mod_phase  ) ;
-      mod_phase = Math.max(     0 , mod_phase  ) ;
-      $("#dummy_gen_mod_phase").val(""+mod_phase);
-    }
-
-    if( lock_gen_mod_hp_arr.length === 2) {
-      if ( lock_gen_mod_hp_arr[1].toLowerCase()=="s" || lock_gen_mod_hp_arr[1].toLowerCase()=="seg" )
-        mod_hp = Math.round( mod_hp / (2520*8e-9) )-1;
-      if ( lock_gen_mod_hp_arr[1].toLowerCase()=="ms" )
-        mod_hp = Math.round( mod_hp / (2520*8e-9*1000) )-1;
-      if ( lock_gen_mod_hp_arr[1].toLowerCase()=="us"  || lock_gen_mod_hp_arr[1].toLowerCase()=="μs"   )
-        mod_hp = Math.round( mod_hp / (2520*8e-9*1000*1000) )-1;
-      mod_hp = Math.min(  819100 , mod_hp  ) ;
-      mod_hp = Math.max(       0 , mod_hp  ) ;
-      $("#dummy_gen_mod_hp").val(""+mod_hp);
-    }
-
-    if( lock_gen_mod_sqp_arr.length === 2) {
-      if ( lock_gen_mod_sqp_arr[1].toLowerCase()=="s"  || lock_gen_mod_sqp_arr[1].toLowerCase()=="seg")
-        mod_sqp = Math.round( mod_sqp / 8e-9 /2 )-1;
-      if ( lock_gen_mod_sqp_arr[1].toLowerCase()=="ms"  )
-        mod_sqp = Math.round( mod_sqp / (8e-9 * 2 * 1000) )-1;
-      if ( lock_gen_mod_sqp_arr[1].toLowerCase()=="us"  || lock_gen_mod_sqp_arr[1].toLowerCase()=="μs")
-        mod_sqp = Math.round( mod_sqp / (8e-9 * 2 * 1000**2 ) )-1;
-      if ( lock_gen_mod_sqp_arr[1].toLowerCase()=="ns"  )
-        mod_sqp = Math.round( mod_sqp / 8  ) ;
-      mod_sqp = Math.min(  819100 , mod_sqp  ) ;
-      mod_sqp = Math.max(       0 , mod_sqp  ) ;
-      $("#dummy_gen_mod_sqp").val(""+mod_sqp);
-    }
-
-
-    $('#dummy_gen_mod_phase_text'   ).html( "<small><b>" + (mod_phase   /2520*360).toFixed(1) + "&nbsp;deg&nbsp;|&nbsp;" +   (mod_phase   /2520*2).toFixed(1) + "&nbsp;п&nbsp;rad</b></small>");
-
-    hp_period=(mod_hp+1)*2520*8e-9;
-    if ( hp_period === 0 ){
-      txt=" OFF ";
-    }else{
-      oom = Math.floor(Math.log10(hp_period)/3);
-      val = hp_period/Math.pow(10,3*oom);
-      txt = "<small><b>&tau;&nbsp;=&nbsp;" + val.toFixed(3) + "&nbsp;" + units[oom.toString()] + "s</b>";
-
-      oom  = Math.floor(Math.log10(1/hp_period)/3);
-      val  = (1/hp_period)/Math.pow(10,3*oom);
-      txt += " <br> <b>f&nbsp;=&nbsp;" + val.toFixed(3) + "&nbsp;" + units[oom.toString()] + "Hz</b></small>";
-    }
-
-    $('#dummy_gen_mod_hp_text').html( txt   );
-
-    sqp_period=(mod_sqp+1)*8e-9*2;
-    if ( mod_sqp > 0 ){
-      oom = Math.floor(Math.log10(sqp_period)/3);
-      val = sqp_period/Math.pow(10,3*oom);
-      txt = "<small><b>&tau;&nbsp;=&nbsp;" + val.toFixed(3) + "&nbsp;" + units[oom.toString()] + "s</b>";
-
-      oom  = Math.floor(Math.log10(1/sqp_period)/3);
-      val  = (1/sqp_period)/Math.pow(10,3*oom);
-      txt += " <br> <b>f&nbsp;=&nbsp;" + val.toFixed(3) + "&nbsp;" + units[oom.toString()] + "Hz</b></small>";
-    }
-
-    $('#dummy_gen_mod_sqp_text').html( txt   );
-
-    sqp_num = ( mod_sqp > 0 ) ? (mod_sqp-1)*2+4 : 2520 ;
-    $('#dummy_gen_mod_phase_sq_text').html( "<small><b>" + (mod_phase_sq/sqp_num*360).toFixed(1) + "&nbsp;deg&nbsp;|&nbsp;" +   (mod_phase_sq/sqp_num*2).toFixed(1) + "&nbsp;п&nbsp;rad</b></small>");
-    */
-    return 0;
-  }
-
-
-  function lock_ctrl_update() {
-    /* DISABLED BY LOLO
-    lock_lock_trig_time_val_arr = $("#dummy_lock_trig_time_val" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_lock_trig_val_arr      = $("#dummy_lock_trig_val" ).val().trim().split(' ').filter( function(n,i){ return n!=="" } );
-    lock_ctrl_aux_trig_type     = parseInt($("#dummy_ctrl_aux_trig_type" ).val());
-
-    if( !$.isNumeric(lock_lock_trig_time_val_arr[0]) || !$.isNumeric(lock_lock_trig_val_arr[0])  ) return -1 ;
-
-    if (params) if (params.local)
-    if( parseLocalFloat(lock_lock_trig_time_val_arr[0]) == trig_time  &&
-        parseLocalFloat(lock_lock_trig_val_arr[0])      == trig_val   &&
-        lock_ctrl_aux_trig_type                         == aux_trig_type
-        ) return -1 ;
-
-    trig_time    = Math.abs( parseLocalFloat( lock_lock_trig_time_val_arr[0] ) );
-    trig_val     =           parseLocalFloat( lock_lock_trig_val_arr[0]        );
-    aux_trig_type=                            lock_ctrl_aux_trig_type           ;
-
-    if( lock_lock_trig_time_val_arr.length === 2) {
-      if ( lock_lock_trig_time_val_arr[1].toLowerCase()=="s" || lock_lock_trig_time_val_arr[1].toLowerCase()=="seg" )
-        trig_time = Math.round( trig_time / 8e-9 );
-      if ( lock_lock_trig_time_val_arr[1].toLowerCase()=="ms" )
-        trig_time = Math.round( trig_time / 8e-6 );
-      if ( lock_lock_trig_time_val_arr[1].toLowerCase()=="us"  || lock_lock_trig_time_val_arr[1].toLowerCase()=="μs"   )
-        trig_time = Math.round( trig_time / 8e-3 );
-      trig_time = Math.min( 500000000 , trig_time  ) ;
-      trig_time = Math.max(         0 , trig_time  ) ;
-      $("#dummy_lock_trig_time_val").val(""+trig_time);
-    }
-
-    if( lock_lock_trig_val_arr.length === 2) {
-      if ( lock_lock_trig_val_arr[1].toLowerCase()=="v" )
-        trig_val = Math.round( trig_val * 8192 );
-      if ( lock_lock_trig_val_arr[1].toLowerCase()=="mv" )
-        trig_val = Math.round( trig_val * 8192 /1000 );
-      trig_val = Math.min(  8191 , trig_val  ) ;
-      trig_val = Math.max( -8192 , trig_val  ) ;
-      $("#dummy_lock_trig_val").val(""+trig_val);
-    }
-
-    timeval = trig_time*8e-9;
-    if ( timeval === 0 ){
-      txt=" OFF ";
-    }else{
-      oom = Math.floor(Math.log10(timeval)/3);
-      val = timeval/Math.pow(10,3*oom);
-      txt = "<b>T&nbsp;=&nbsp;" + val.toFixed(3) + "&nbsp;" + units[oom.toString()] + "s</b>";
-    }
-
-    $('#dummy_lock_trig_time_val_text').html( txt   );
-
-    $('#dummy_lock_trig_val_text').html( "<small><b>V<sub>trg</sub>&nbsp;=&nbsp;" + (trig_val/8192*1000).toFixed(0) + "&nbsp;mV</b></small>" ) ;
-
-
-    switch(lock_ctrl_aux_trig_type) {
-        case 0:
-            $('#container_lock_lock_trig_sw').addClass('hidden');
-            $('#container_lock_lock_trig_time_val').addClass('hidden');
-            $('#container_lock_lock_trig_val').addClass('hidden');
-            $('#container_lock_ctrl_aux_lock_trig_rise').addClass('hidden');
-            $('#container_btn_set_trig').addClass('hidden');
-            break;
-        case 1:
-            $('#container_lock_lock_trig_sw').addClass('hidden');
-            $('#container_lock_lock_trig_time_val').removeClass('hidden');
-            $('#container_lock_lock_trig_val').addClass('hidden');
-            $('#container_lock_ctrl_aux_lock_trig_rise').addClass('hidden');
-            $('#container_btn_set_trig').removeClass('hidden');
-            break;
-        case 2:
-            $('#container_lock_lock_trig_sw').removeClass('hidden');
-            $('#container_lock_lock_trig_time_val').addClass('hidden');
-            $('#container_lock_lock_trig_val').removeClass('hidden');
-            $('#container_lock_ctrl_aux_lock_trig_rise').removeClass('hidden');
-            $('#container_btn_set_trig').removeClass('hidden');
-            break;
-        case 3:
-            $('#container_lock_lock_trig_sw').removeClass('hidden');
-            $('#container_lock_lock_trig_time_val').removeClass('hidden');
-            $('#container_lock_lock_trig_val').removeClass('hidden');
-            $('#container_lock_ctrl_aux_lock_trig_rise').removeClass('hidden');
-            $('#container_btn_set_trig').removeClass('hidden');
-            break;
-        default:
-            $('#container_lock_lock_trig_sw').removeClass('hidden');
-            $('#container_lock_lock_trig_time_val').removeClass('hidden');
-            $('#container_lock_lock_trig_val').removeClass('hidden');
-            $('#container_lock_ctrl_aux_lock_trig_rise').removeClass('hidden');
-            $('#container_btn_set_trig').removeClass('hidden');
-    }
-    */
-    return 0;
-  }
 
   function format_oom(num,unit="&nbsp;",pre=3){
       var oom = num==0 ? 0 : Math.floor(  Math.log10(Math.abs(num))/3) ;
@@ -2982,10 +2419,6 @@
 
   function onDropdownChange(that, param_name, do_get) {
 
-    if ( $.inArray( param_name, [ 'lock_pidA_PSR', 'lock_pidA_ISR', 'lock_pidA_DSR', 'lock_pidA_SAT' ] )>-1 ) lock_pidA_update() ;
-    if ( $.inArray( param_name, [ 'lock_pidB_PSR', 'lock_pidB_ISR', 'lock_pidB_DSR', 'lock_pidB_SAT' ] )>-1 ) lock_pidB_update() ;
-    if ( $.inArray( param_name, [ 'lock_lpf_F1_tau', 'lock_lpf_F1_order', 'lock_lpf_F2_tau', 'lock_lpf_F2_order', 'lock_lpf_F3_tau', 'lock_lpf_F3_order', 'lock_lpf_sq_tau', 'lock_lpf_sq_order' ] )>-1 ) lpf_update();
-
     // Ext Trig before this change (the rule below applies only to a new value)
     var ext_prev = (param_name == 'dummy_trig_sw' && params.local ? Number(params.local.dummy_trig_sw) : null);
     var restart = false;
@@ -3118,7 +2551,8 @@
 
     // Keys missing in orig_params (a config of another App or of an older version, e.g. without lock_lpf_*):
     // keep the current values, so their controls and params.local do not change. .val(undefined) used to leave
-    // a <select> without selection, lpf_update() copied NaN to params.local and the POSTs never ended.
+    // a <select> without selection, the filter handler of the lock-in Apps copied NaN to params.local and the
+    // POSTs never ended.
     if(params.local) {
       for(var mk in params.local) {
         if(orig_params[mk] === undefined || orig_params[mk] === null) orig_params[mk] = params.local[mk];
@@ -3142,15 +2576,6 @@
         orig_params.xmin = options.xaxes[0].min;
         orig_params.xmax = options.xaxes[0].max;
       }
-      // LOLO
-      if(trigger_just_set) {
-        orig_params.dummy_lock_trig_val      = params.local.dummy_lock_trig_val      ;
-        orig_params.dummy_lock_trig_time_val = params.local.dummy_lock_trig_time_val ;
-        //orig_params.dummy_ctrl_aux_lock_trig_rise     = params.local.dummy_ctrl_aux_lock_trig_rise     ;
-        trigger_just_set=false;
-      }
-      if(orig_params.dummy_lock_feedback !== undefined && orig_params.dummy_lock_control!=orig_params.dummy_lock_feedback)
-        orig_params.dummy_lock_control=orig_params.dummy_lock_feedback;
     }
 
     var unsent = (keep_unsent === true ? unsentChanges(orig_params) : {});
@@ -3253,49 +2678,6 @@
     }
 
 
-    /*
-    $('#dummy_lpf_F1_tau').val( params.original.dummy_lpf_F1 % 16 );
-    $('#dummy_lpf_F2_tau').val( params.original.dummy_lpf_F2 % 16 );
-    $('#dummy_lpf_F3_tau').val( params.original.dummy_lpf_F3 % 16 );
-    $('#dummy_lpf_sq_tau').val( params.original.dummy_lpf_sq % 16 );
-
-    $('#dummy_lpf_F1_order').val( params.original.dummy_lpf_F1_order % 4 );
-    $('#dummy_lpf_F2_order').val( params.original.dummy_lpf_F2_order % 4 );
-    $('#dummy_lpf_F3_order').val( params.original.dummy_lpf_F3_order % 4 );
-    $('#dummy_lpf_sq_order').val( params.original.dummy_lpf_sq_order % 4 );
-
-
-    $('#dummy_ctrl_aux_set_pidA_enable').prop('checked', (params.original.dummy_ctrl_aux_set_pidA_enable ? true : false));
-    $('#dummy_ctrl_aux_set_pidB_enable').prop('checked', (params.original.dummy_ctrl_aux_set_pidB_enable ? true : false));
-    $('#dummy_ctrl_aux_set_ramp_enable').prop('checked', (params.original.dummy_ctrl_aux_set_ramp_enable ? true : false));
-
-    if (params.original.dummy_ctrl_aux_ramp_enable_ctrl)
-      $('#dummy_ctrl_aux_ramp_enable_ctrl').removeClass('btn-default').addClass('btn-primary');
-    else
-      $('#dummy_ctrl_aux_ramp_enable_ctrl').removeClass('btn-primary').addClass('btn-default');
-
-    if (params.original.dummy_ctrl_aux_pidA_enable_ctrl)
-      $('#dummy_ctrl_aux_pidA_enable_ctrl').removeClass('btn-default').addClass('btn-primary');
-    else
-      $('#dummy_ctrl_aux_pidA_enable_ctrl').removeClass('btn-primary').addClass('btn-default');
-
-    if (params.original.dummy_ctrl_aux_pidB_enable_ctrl)
-      $('#dummy_ctrl_aux_pidB_enable_ctrl').removeClass('btn-default').addClass('btn-primary');
-    else
-      $('#dummy_ctrl_aux_pidB_enable_ctrl').removeClass('btn-primary').addClass('btn-default');
-
-    if (params.original.dummy_ctrl_aux_lock_now)
-      $('#dummy_ctrl_aux_lock_now').removeClass('btn-default').addClass('btn-primary');
-    else
-      $('#dummy_ctrl_aux_lock_now').removeClass('btn-primary').addClass('btn-default');
-
-    if (params.original.dummy_ctrl_aux_launch_lock_trig)
-      $('#dummy_ctrl_aux_launch_lock_trig').removeClass('btn-default').addClass('btn-primary');
-    else
-      $('#dummy_ctrl_aux_launch_lock_trig').removeClass('btn-primary').addClass('btn-default');
-
-    $('#dummy_ctrl_aux_trig_type').val(params.original.dummy_ctrl_aux_trig_type);
-    */
 
     // [LOLO DOCK LOADPARAMS]
     // Checkboxes
@@ -3322,22 +2704,9 @@
     }else{
       $('#dummy_osc_raw_mode').removeClass('btn-primary').addClass('btn-default').data('checked',false);
     }
-    if (params.original.dummy_osc_lockin_mode){             // dummy_osc_lockin_mode
-      $('#dummy_osc_lockin_mode').removeClass('btn-default').addClass('btn-primary').data('checked',true);
-    }else{
-      $('#dummy_osc_lockin_mode').removeClass('btn-primary').addClass('btn-default').data('checked',false);
-    }
     
     // [LOLO DOCK LOADPARAMS END]
 
-    /* ERASE LOLO
-    lock_ramp_step_update();
-    lock_modulation_update();
-    lock_ctrl_update();
-    lock_pidA_update();
-    lock_pidB_update();
-    lpf_update();
-    */
     display_update();
 
     updateTimeUnits(orig_params);
@@ -3828,7 +3197,7 @@
   }
 
   // [RESET ZOOM BEGIN] (port of lock_in+pid_harmonic v2.3.21 without the ramp / modulation periods: this App has no
-  // preset sweeps; pure functions, also run by tests/reset_zoom_sim.js)
+  // preset sweeps; pure functions, also run by tests/ext_trig_reset_zoom_sim.js)
   // Decimation of each scope time_range (src/fpga.c, osc_fpga_cnv_time_range_to_dec()) and length of one memory of
   // the scope (16384 samples of 8 ns) at Dec 1, in seconds.
   var scope_dec_list = [1, 8, 64, 128, 256, 512, 1024, 8192, 65536, 524288];
@@ -4869,14 +4238,6 @@
                   </div>
                   <div id="scope_more_options" class="panel-group col-xs-12 col-sm-12 col-md-12 collapse">
                     <div class="row">
-                      <hr style="margin: 7px 7px">
-                      <div class="panel-group col-xs-12">
-                        <form class="form-horizontal" role="form" onsubmit="return false;" novalidate>
-                          <div class="form-group text-center">
-                            <button id="dummy_osc_lockin_mode" class="btn btn-primary btn-lg" data-checked="true" disabled>R|Phase&nbsp;Mode</button>
-                          </div>
-                        </form>
-                      </div>
                       <hr style="margin: 7px 7px">
                       <div class="panel-group col-xs-12 col-sm-12 col-md-12 text-center">
                         Disable anti-aliasing filter:

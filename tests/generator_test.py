@@ -245,6 +245,41 @@ class Generated(unittest.TestCase):
         self.assertNotIn('DEBUG', r.stdout)
         self.assertNotIn('RELOAD', r.stdout)
 
+    # -- CP6: version, help, lock-in leftovers, Ecosystem 0.9x packaging
+    def test_version_help_eco1(self):
+        sys.path.insert(0, os.path.join(ROOT, 'dummy'))
+        import config_lib
+        ver = config_lib.RP_DUMMY_VERSION
+        self.assertRegex(ver, r'^\d+\.\d+\.\d+$')
+        r = run([sys.executable, '-B', os.path.join(ROOT, 'new_project.py'), '--version'])
+        self.assertEqual(r.stdout.strip(), f'rp_dummy2 {ver}')
+        r = run([sys.executable, '-B', os.path.join(ROOT, 'new_project.py'), '-h'])
+        for key in ('AppName', 'include_genfun', 'include_pids', 'register_map', 'rp_host', 'ssh_opts', 'scp_opts',
+                    'type', 'label', 'bits_number', 'signed', 'default', 'options', 'display', 'scale', 'unit',
+                    '[names]', 'combo', 'number', 'checkbox', 'button', 'monitor'):
+            self.assertIn(key, r.stdout, key)
+        prj, out = self.gen('v6', '--no-icon')
+        app = os.path.join(prj, 'v6')
+        self.assertIn(f'rp_dummy2 {ver}', read(os.path.join(app, 'info', 'info.json')))
+        self.assertIn(f'rp_dummy2](https://github.com/marceluda/rp_dummy) {ver}', read(os.path.join(prj, 'README.md')))
+        self.assertIn(f'rp_dummy2 {ver}', read(os.path.join(prj, 'CHANGELOG.md')))
+        for fn in ('index.html', os.path.join('src', 'main.c'), os.path.join('src', 'main.h'),
+                   os.path.join('src', 'worker.c')):
+            txt = read(os.path.join(app, fn))
+            for w in ('lockin_mode', 'LOCKIN_MODE', 'R|Phase', 'lock_pidA', 'lpf_update', 'lock_ramp_step_update'):
+                self.assertFalse(w in txt, f'{fn}: {w}')
+        # 0.9x bitstream of the packages: the 2020.1 one, or red_pitaya_eco1.bit when it exists
+        r = run(['make', '-n', '-C', app, 'target/v6', 'BUILD_NUMBER=7'])
+        self.assertIn('red_pitaya.bit for Ecosystem 0.9x/1.0 = red_pitaya.bit (Vivado 2020.1', r.stdout)
+        open(os.path.join(app, 'red_pitaya_eco1.bit'), 'w').close()
+        r = run(['make', '-n', '-C', app, 'target/v6', 'BUILD_NUMBER=7'])
+        self.assertIn('= red_pitaya_eco1.bit (Vivado 2015.2', r.stdout)
+        self.assertIn('cp red_pitaya_eco1.bit target/v6/red_pitaya.bit', r.stdout)
+        r = run(['make', '-n', '-C', prj, 'eco1'])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = run(['make', '-n', '-C', app, 'clean_eco1'])
+        self.assertIn('target', r.stdout)
+
     # -- CP5: remote control tools of c/ and the App name in their paths
     def test_remote_tools_paths(self):
         prj, out = self.gen('rmt', '--no-icon')

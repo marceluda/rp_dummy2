@@ -127,6 +127,6 @@ endmodule
 /* 
 Instantiation example:
 
-dummy_debounce #(.N0(7) , N1(4)) i_debounce_NAME ( .clk(clk), .reset(rst), .in(IN), .db_level(OUT), .db_tick (OUT_TICK)  );
+dummy_debounce #(.N0(7) , .N1(4)) i_debounce_NAME ( .clk(clk), .reset(rst), .in(IN), .db_level(OUT), .db_tick (OUT_TICK)  );
 
 */

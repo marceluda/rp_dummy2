@@ -3,7 +3,8 @@
 #   make          build and run every test
 #   make c        auto_set_harness and test_tools.sh only
 #   make js       web page simulations (node)
-#   make py       generator tests (python3)
+#   make py       generator and remote control script tests (python3)
+#   make hdl      optional, not in "make": library modules in the Vivado 2020.1 simulator (xsim)
 #   make clean
 #
 # auto_set_harness: AUTO (auto-set) of dummy/src/worker.c with a mock scope: 2.0 sample decoding,
@@ -15,6 +16,9 @@
 # App name in the paths of fpga.sh / nginx.conf / src/main.c, c/ without binaries.
 # test_tools.sh: c/dummy and c/osc built for the PC on a sparse file instead of /dev/mem (reads, writes,
 # errors, ranges), and the offsets of app_regs.h against the register struct of the controller.
+# remote_test.py: resources/streaming/stream_receiver.py (--board) and resources/remote_control/http_regs.py
+# against a mock board (HTTP endpoints + streaming socket) on localhost.
+# lib_modules_tb.v (make hdl): fun_icdf, fun_pico, gen_ramp of the library (dummy/fpga/prj/v0.94/rtl/dummy/).
 
 SRC     = ../dummy/src
 CC      = gcc
@@ -23,7 +27,7 @@ TIMEOUT = timeout 60
 NODE   ?= node
 PYTHON ?= python3
 
-.PHONY: all run c js py clean
+.PHONY: all run c js py hdl clean
 
 all: run
 
@@ -47,6 +51,18 @@ js:
 
 py:
 	$(TIMEOUT) $(PYTHON) -B generator_test.py
+	$(TIMEOUT) $(PYTHON) -B remote_test.py
+
+LIB = ../dummy/fpga/prj/v0.94/rtl/dummy
+VIVADO_SETTINGS ?= /tools/Xilinx/Vivado/2020.1/settings64.sh
+
+hdl:
+	@[ -f "$(VIVADO_SETTINGS)" ] || { echo "Vivado not found ($(VIVADO_SETTINGS)): hdl test skipped"; exit 0; } ; \
+	rm -rf hdl_sim ; mkdir hdl_sim ; cp $(LIB)/*.dat hdl_sim/ ; \
+	env -i HOME="$$HOME" PATH=/usr/bin:/bin bash -c '. "$(VIVADO_SETTINGS)" > /dev/null && cd hdl_sim && \
+	  xvlog ../lib_modules_tb.v ../$(LIB)/fun_icdf.v ../$(LIB)/fun_pico.v ../$(LIB)/gen_ramp.v > xvlog.log && \
+	  xelab lib_modules_tb -s tb > xelab.log && xsim tb -R > xsim.log' || { echo "hdl: build failed (tests/hdl_sim/*.log)"; exit 1; } ; \
+	grep "LIB ERRORS" hdl_sim/xsim.log ; grep -q "LIB ERRORS=0" hdl_sim/xsim.log
 
 clean:
-	rm -f auto_set_harness
+	rm -rf auto_set_harness hdl_sim

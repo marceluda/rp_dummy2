@@ -50,7 +50,7 @@ typedef struct rp_osc_meas_res_s {
 /* Parameters indexes - these defines should be in the same order as
  * rp_app_params_t structure defined in main.c */
 //define PARAMS_NUM        81
-#define PARAMS_NUM        105
+#define PARAMS_NUM        104
 #define MIN_GUI_PARAM     0
 #define MAX_GUI_PARAM     1
 #define TRIG_MODE_PARAM   2
@@ -142,25 +142,24 @@ typedef struct rp_osc_meas_res_s {
 #define DUMMY_OSC1_FILT_OFF             83
 #define DUMMY_OSC2_FILT_OFF             84
 #define DUMMY_OSC_RAW_MODE              85
-#define DUMMY_OSC_LOCKIN_MODE           86
-#define DUMMY_TRIG_SW                   87
-#define DUMMY_OUT1_SW                   88
-#define DUMMY_OUT2_SW                   89
-#define DUMMY_SLOW_OUT1_SW              90
-#define DUMMY_SLOW_OUT2_SW              91
-#define DUMMY_SLOW_OUT3_SW              92
-#define DUMMY_SLOW_OUT4_SW              93
-#define DUMMY_IN1                       94
-#define DUMMY_IN2                       95
-#define DUMMY_OUT1                      96
-#define DUMMY_OUT2                      97
-#define DUMMY_SLOW_OUT1                 98
-#define DUMMY_SLOW_OUT2                 99
-#define DUMMY_SLOW_OUT3                 100
-#define DUMMY_SLOW_OUT4                 101
-#define DUMMY_OSCA                      102
-#define DUMMY_OSCB                      103
-#define DUMMY_READ_CTRL                 104
+#define DUMMY_TRIG_SW                   86
+#define DUMMY_OUT1_SW                   87
+#define DUMMY_OUT2_SW                   88
+#define DUMMY_SLOW_OUT1_SW              89
+#define DUMMY_SLOW_OUT2_SW              90
+#define DUMMY_SLOW_OUT3_SW              91
+#define DUMMY_SLOW_OUT4_SW              92
+#define DUMMY_IN1                       93
+#define DUMMY_IN2                       94
+#define DUMMY_OUT1                      95
+#define DUMMY_OUT2                      96
+#define DUMMY_SLOW_OUT1                 97
+#define DUMMY_SLOW_OUT2                 98
+#define DUMMY_SLOW_OUT3                 99
+#define DUMMY_SLOW_OUT4                 100
+#define DUMMY_OSCA                      101
+#define DUMMY_OSCB                      102
+#define DUMMY_READ_CTRL                 103
 
 // [MAINDEFH DOCK END]
 

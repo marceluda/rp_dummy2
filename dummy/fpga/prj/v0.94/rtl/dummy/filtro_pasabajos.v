@@ -109,16 +109,16 @@ Ejemplos de instanciación:
 filtro_pasabajos #(.R(14),.TAU_OFFSET(14)) i_filtro_pasabajos_NAME (
     .clk(clk), .rst(rst), 
     // inputs
-    .tau( 14'd12   ), 
+    .tau( 4'd12    ),
     .dis( 1'b0     ), 
     .in(  IN       ),
     // outputs
     .out(  OUT     ) 
 );
 
-filtro_pasabajos #(.R(14),.TAU_OFFSET(14)) i_filtro_pasabajos_NAME (.clk(clk),.rst(rst), .tau( 14'd12   ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
+filtro_pasabajos #(.R(14),.TAU_OFFSET(14)) i_filtro_pasabajos_NAME (.clk(clk),.rst(rst), .tau( 4'd12    ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
 
-filtro_pasabajos i_filtro_pasabajos_NAME (.clk(clk),.rst(rst), .tau( 14'd12   ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
+filtro_pasabajos i_filtro_pasabajos_NAME (.clk(clk),.rst(rst), .tau( 4'd12    ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
 
 
 */

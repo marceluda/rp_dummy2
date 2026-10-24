@@ -4,6 +4,9 @@
 #   source settings.sh ; LANG=C make     C controller + FPGA + packages (archive/)
 #   make clean                           remove build products
 #   make upload                          copy the App to the board of _settings.env (RPIP)
+#   make eco1                            optional (Vivado 2015.2): red_pitaya.bit with the 0.9x scope for
+#                                        Ecosystem 0.9x/1.0; then "make" puts it in the packages
+#   make clean_eco1                      remove it (the packages take the Vivado 2020.1 red_pitaya.bit again)
 #
 
 APP=@APP@
@@ -22,7 +25,7 @@ CFLAGS += -DVERSION=$(VER)-$(BUILD_NUMBER) -DREVISION=$(REVISION)
 export CFLAGS
 
 
-.PHONY: all clean upload
+.PHONY: all clean upload eco1 clean_eco1
 
 all:
 	mkdir -p archive
@@ -35,3 +38,9 @@ clean:
 
 upload:
 	$(MAKE) -C $(APP) upload
+
+eco1:
+	$(MAKE) -C $(APP) eco1
+
+clean_eco1:
+	$(MAKE) -C $(APP) clean_eco1

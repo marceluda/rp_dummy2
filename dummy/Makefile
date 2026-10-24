@@ -24,7 +24,8 @@ CONTROLLERHF   = controllerhf.so
 # fpga.bit.bin (Ecosystem 2.0: loaded with fpgautil by fpga.sh).
 # Ecosystem 0.9x/1.0 load the file of fpga.conf (red_pitaya.bit). Optional: "make eco1" synthesizes the
 # Vivado 2015.2 design of fpga_eco1/ (the 0.9x scope; same dummy.v) into red_pitaya_eco1.bit, which then
-# goes in the packages as red_pitaya.bit (the 2020.1 one otherwise).
+# goes in the packages as red_pitaya.bit (the 2020.1 one otherwise). With the 0.9x scope of that bitstream the
+# streaming of c/ (stream_rate, TrgUnlock) and the longest time range (524288) are not available.
 FPGA_BIN  = fpga.bit.bin
 FPGA_PRJ ?= v0.94
 FPGA_OUT  = fpga/prj/$(FPGA_PRJ)/out
@@ -79,11 +80,14 @@ $(ECO1_BIT):
 clean_eco1:
 	$(MAKE) -C fpga_eco1 clean
 	-$(RM) -f $(ECO1_BIT)
+	-$(RM) -rf target   # the packages must take the Vivado 2020.1 red_pitaya.bit again
 
 # Files of the App on the board
 APP_FILES = fpga.conf info py css js c index.html nginx.conf
 
-target/$(APP): red_pitaya.bit $(FPGA_BIN) $(CONTROLLERHF) c_tools index.html
+# (the package is rebuilt when red_pitaya_eco1.bit appears or changes)
+target/$(APP): red_pitaya.bit $(FPGA_BIN) $(wildcard $(ECO1_BIT)) $(CONTROLLERHF) c_tools index.html
+	@echo "Package: red_pitaya.bit for Ecosystem 0.9x/1.0 = $(PKG_BIT)$(if $(wildcard $(ECO1_BIT)), (Vivado 2015.2, 0.9x scope: make eco1), (Vivado 2020.1, 2.0 scope))"
 	mkdir -p target/$(APP)
 	cp -r $(CONTROLLERHF) $(APP_FILES) fpga.sh $(FPGA_BIN) target/$(APP)
 	cp $(PKG_BIT) target/$(APP)/red_pitaya.bit   # Ecosystem 0.9x/1.0 (fpga.conf)

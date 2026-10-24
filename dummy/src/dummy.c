@@ -161,24 +161,24 @@ int dummy_update_main(rp_app_params_t *params)
     params[ 82].value = (float)g_dummy_reg->oscB_sw              ; // dummy_oscB_sw
     params[ 83].value = (float) ((g_dummy_reg->osc_ctrl      )& 0x01) ; // dummy_osc1_filt_off
     params[ 84].value = (float) ((g_dummy_reg->osc_ctrl >> 1 )& 0x01) ; // dummy_osc2_filt_off
-    params[ 87].value = (float)g_dummy_reg->trig_sw              ; // dummy_trig_sw
-    params[ 88].value = (float)g_dummy_reg->out1_sw              ; // dummy_out1_sw
-    params[ 89].value = (float)g_dummy_reg->out2_sw              ; // dummy_out2_sw
-    params[ 90].value = (float)g_dummy_reg->slow_out1_sw         ; // dummy_slow_out1_sw
-    params[ 91].value = (float)g_dummy_reg->slow_out2_sw         ; // dummy_slow_out2_sw
-    params[ 92].value = (float)g_dummy_reg->slow_out3_sw         ; // dummy_slow_out3_sw
-    params[ 93].value = (float)g_dummy_reg->slow_out4_sw         ; // dummy_slow_out4_sw
-    params[ 94].value = (float)g_dummy_reg->in1                  ; // dummy_in1
-    params[ 95].value = (float)g_dummy_reg->in2                  ; // dummy_in2
-    params[ 96].value = (float)g_dummy_reg->out1                 ; // dummy_out1
-    params[ 97].value = (float)g_dummy_reg->out2                 ; // dummy_out2
-    params[ 98].value = (float)g_dummy_reg->slow_out1            ; // dummy_slow_out1
-    params[ 99].value = (float)g_dummy_reg->slow_out2            ; // dummy_slow_out2
-    params[100].value = (float)g_dummy_reg->slow_out3            ; // dummy_slow_out3
-    params[101].value = (float)g_dummy_reg->slow_out4            ; // dummy_slow_out4
-    params[102].value = (float)g_dummy_reg->oscA                 ; // dummy_oscA
-    params[103].value = (float)g_dummy_reg->oscB                 ; // dummy_oscB
-    params[104].value = (float)g_dummy_reg->read_ctrl            ; // dummy_read_ctrl
+    params[ 86].value = (float)g_dummy_reg->trig_sw              ; // dummy_trig_sw
+    params[ 87].value = (float)g_dummy_reg->out1_sw              ; // dummy_out1_sw
+    params[ 88].value = (float)g_dummy_reg->out2_sw              ; // dummy_out2_sw
+    params[ 89].value = (float)g_dummy_reg->slow_out1_sw         ; // dummy_slow_out1_sw
+    params[ 90].value = (float)g_dummy_reg->slow_out2_sw         ; // dummy_slow_out2_sw
+    params[ 91].value = (float)g_dummy_reg->slow_out3_sw         ; // dummy_slow_out3_sw
+    params[ 92].value = (float)g_dummy_reg->slow_out4_sw         ; // dummy_slow_out4_sw
+    params[ 93].value = (float)g_dummy_reg->in1                  ; // dummy_in1
+    params[ 94].value = (float)g_dummy_reg->in2                  ; // dummy_in2
+    params[ 95].value = (float)g_dummy_reg->out1                 ; // dummy_out1
+    params[ 96].value = (float)g_dummy_reg->out2                 ; // dummy_out2
+    params[ 97].value = (float)g_dummy_reg->slow_out1            ; // dummy_slow_out1
+    params[ 98].value = (float)g_dummy_reg->slow_out2            ; // dummy_slow_out2
+    params[ 99].value = (float)g_dummy_reg->slow_out3            ; // dummy_slow_out3
+    params[100].value = (float)g_dummy_reg->slow_out4            ; // dummy_slow_out4
+    params[101].value = (float)g_dummy_reg->oscA                 ; // dummy_oscA
+    params[102].value = (float)g_dummy_reg->oscB                 ; // dummy_oscB
+    params[103].value = (float)g_dummy_reg->read_ctrl            ; // dummy_read_ctrl
     // [PARAMSUPDATE DOCK END]
 
     return 0;

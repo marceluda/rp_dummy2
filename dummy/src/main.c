@@ -314,7 +314,6 @@ static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
     { "dummy_osc1_filt_off"           ,      1, 1, 0,            0,            1 }, /** oscilloscope control osc1_filt_off **/
     { "dummy_osc2_filt_off"           ,      1, 1, 0,            0,            1 }, /** oscilloscope control osc2_filt_off **/
     { "dummy_osc_raw_mode"            ,      0, 0, 0,            0,            1 }, /** Set oscilloscope mode in Raw (int unit instead of Volts) **/
-    { "dummy_osc_lockin_mode"         ,      0, 0, 0,            0,            1 }, /** Set oscilloscope mode in lock-in (ch1 as R [V|int], ch2 as Phase [rad]) **/
     { "dummy_trig_sw"                 ,      0, 1, 0,            0,          255 }, /** Select the external trigger signal **/
     { "dummy_out1_sw"                 ,      0, 1, 0,            0,           15 }, /** switch for muxer out1 **/
     { "dummy_out2_sw"                 ,      0, 1, 0,            0,           15 }, /** switch for muxer out2 **/
@@ -844,9 +843,9 @@ int rp_set_params(rp_app_params_t *p, int len)
         if(cmp_val != p[i].value) {
             if(p_idx < PARAMS_AWG_PARAMS)
                 params_change = 1;
-            /* dummy params that the scope worker uses (inputs of the channels, raw / R-phase display) */
+            /* dummy params that the scope worker uses (inputs of the channels, raw display) */
             if((p_idx == DUMMY_OSCA_SW) || (p_idx == DUMMY_OSCB_SW) ||
-               (p_idx == DUMMY_OSC_RAW_MODE) || (p_idx == DUMMY_OSC_LOCKIN_MODE))
+               (p_idx == DUMMY_OSC_RAW_MODE))
                 params_change = 1;
             if ( (p_idx >= PARAMS_AWG_PARAMS) && (p_idx < PARAMS_PID_PARAMS) )
                 awg_params_change = 1;

@@ -11,6 +11,10 @@ import re
 import fileinput
 import shutil
 
+# Version of the generator (rp_dummy2: new_project.py, config_tool.py, the template). Generated Apps keep their own
+# version in info/info.json (0.1.0 when created); this one is recorded in their info.json, README and CHANGELOG.
+RP_DUMMY_VERSION = '1.0.0'
+
 
 # User RTL of the App: the dummy module and its own modules (shared by the Vivado 2020.1 design of fpga/
 # and the optional Vivado 2015.2 design of fpga_eco1/)

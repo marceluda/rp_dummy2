@@ -85,8 +85,8 @@ sum_2N #( .R(14), .N(4) ) i_sum_2N_NAME (
 	// inputs
 	.in    ( INPUT_BUS ), // Bus de entrada
 	// outputs
-	.sum  (  SUMA     ),   // Suma de 10000 valores de entrada de INPUT_BUS
-	.mean ( PROMEDIO  ),   // Promedio de 10000 valores de entrada de INPUT_BUS
+	.sum  (  SUMA     ),   // Suma de 2**N valores de entrada de INPUT_BUS
+	.mean ( PROMEDIO  ),   // Promedio de 2**N valores de entrada de INPUT_BUS
 	.tick (           )    // Vale 1 cuando se actualiza la salida
 );
 

@@ -1,6 +1,6 @@
 # Devel: compiling, testing and uploading
 
-> Documented version: branch `devel2.0`, checkpoint CP5 (remote control tools, streaming; on top of CP4_bis `8b80464`). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **1.0.0** (branch `devel2.0`, checkpoint CP6). Back to the [README](../README.md).
 > Related: [Usage.md](Usage.md) (generate an App, `config_tool.py`), [App.md](App.md) (registers, scope, modules).
 
 Contents:
@@ -10,7 +10,8 @@ Contents:
 3. [Compiling](#compiling)
 4. [Host tests](#4-host-tests)
 5. [Upload to the Red Pitaya](#upload-to-the-red-pitaya)
-6. [Working on the generator itself](#6-working-on-the-generator-itself)
+6. [Ecosystem 0.9x/1.0](#ecosystem-09x10)
+7. [Working on the generator itself](#7-working-on-the-generator-itself)
 
 ---
 
@@ -108,17 +109,17 @@ Run them as `make -C my_app <target>` from the project folder, or `make <target>
 | `zip` / `tar` | builds `target/` and packs it (builds what is missing, FPGA included) | `archive/my_app-<ver>-<build>-<rev>.zip` / `.tar.gz` |
 | `clean_app` | C objects, `controllerhf.so`, binaries of `c/`, `target/`; BUILD_NUMBER + 1 | |
 | `clean_fpga` | `make -C fpga clean`, bitstreams, `target/`; BUILD_NUMBER + 1 | |
-| `clean_eco1` | `fpga_eco1/` products and `red_pitaya_eco1.bit` | |
+| `clean_eco1` | `fpga_eco1/` products, `red_pitaya_eco1.bit` and `target/` (the next package takes the 2020.1 bitstream again) | |
 | `clean_target` | `target/` | |
 | `clean` | `clean_app` + `clean_fpga` + `clean_target` (not `clean_eco1`) | |
 | `upload`, `upload_bit`, `upload_html` | copy to the board (see [Upload](#upload-to-the-red-pitaya)) | |
 
-The project `Makefile` has `all`, `clean` and `upload`, which call the App Makefile.
+The project `Makefile` has `all`, `clean`, `upload`, `eco1` and `clean_eco1`, which call the App Makefile.
 
 Version string: `<ver>-<build>-<rev>` with `ver` from `info/info.json` (`0.1.0` for a new App), `build` = `BUILD_NUMBER`
 (`_build_number`, 0 by default) and `rev` = `REVISION` (`devbuild` by default; `make REVISION=$(git rev-parse --short
 HEAD)`). It is written into `target/my_app/info/info.json` and into the `app_version` of `target/my_app/index.html`
-(`dummy/Makefile:95-97`).
+(`dummy/Makefile:99-101`).
 
 ### Contents of the package (`target/`)
 
@@ -134,8 +135,10 @@ target/
     └── nginx.conf                          Ecosystem 2.0 (HTTP endpoints: restart nginx after the first upload)
 ```
 
-(`APP_FILES`, `dummy/Makefile:84-97`.) The 0.9x/1.0 bitstream of the packages is `red_pitaya_eco1.bit` when it exists,
-otherwise the 2020.1 `red_pitaya.bit` (`PKG_BIT`, `dummy/Makefile:33`).
+(`APP_FILES`, `dummy/Makefile:86-101`.) The 0.9x/1.0 bitstream of the packages is `red_pitaya_eco1.bit` when it exists,
+otherwise the 2020.1 `red_pitaya.bit` (`PKG_BIT`, `dummy/Makefile:34`); the build prints which one
+(`Package: red_pitaya.bit for Ecosystem 0.9x/1.0 = ...`), and the package is rebuilt when `red_pitaya_eco1.bit` appears
+or changes. See [Ecosystem 0.9x/1.0](#ecosystem-09x10).
 
 ### FPGA (`my_app/fpga/Makefile`)
 
@@ -161,7 +164,7 @@ and device tree; `project` opens the 2015.2 GUI.
 | Build | Time | Result | Source |
 |---|---|---|---|
 | FPGA Vivado 2020.1 (`make`, test App `dummy2_test`) | 21 min 25 s (CP4), 22 min 45 s (CP4_bis), 22 min 28 s (CP5, C + FPGA + packages) | CP5: 0 errors, 54 CRITICAL WARNING of the base design; WNS −0.379 ns (`pll_pwm_clk`, 8 endpoints) and −0.195 ns (`pll_adc_clk`, 12 endpoints: scope configuration `i_scope/i_cfg` and `i_dummy/stream_cmd` → scope decimator, quasi-static registers), hold OK (WHS +0.031 ns); 5600 LUT, 18 BRAM | `reportes/dummy2/2026-10-23_cp5_rebase.md` |
-| FPGA Vivado 2015.2 (`make eco1`) | 5 min 26 s | 0 errors; WNS −0.263 ns, WHS −2.163 ns (base 2015.2 design) | `reportes/dummy2/2026-10-22_cp3_1_cp4.md` |
+| FPGA Vivado 2015.2 (`make eco1`) | 5 min 26 s (CP4), 5 min 54 s (CP6, eco1 + C + packages) | 0 errors, no width/undriven warnings of `dummy`; WNS −0.263 ns (CP4) / −0.607 ns (CP6), WHS −2.163 ns (base 2015.2 design: AXI of the PS and ADC input, not the user logic) | `reportes/dummy2/2026-10-22_cp3_1_cp4.md`, `reportes/dummy2/2026-10-23_cp6.md` |
 | C controller + web package | seconds | 0 gcc warnings (`-Werror`) | idem |
 
 The small negative slacks are in the base Red Pitaya design (PWM clock and scope configuration), not in the user logic,
@@ -192,7 +195,8 @@ Vivado (`tests/Makefile`).
 make -C tests            # everything (about 13 s)
 make -C tests c          # auto_set_harness and test_tools.sh only
 make -C tests js         # web page simulations (skipped if node is not installed)
-make -C tests py         # generator tests
+make -C tests py         # generator and remote control script tests
+make -C tests hdl        # optional (Vivado 2020.1 xsim, ~30 s, not part of "make"): library modules
 ```
 
 | Test | Covers |
@@ -201,9 +205,12 @@ make -C tests py         # generator tests
 | `test_tools.sh` (gcc) | `c/dummy` and `c/osc` built for the PC over a sparse file instead of `/dev/mem`: reads, writes, hex, sign, errors (name, read only, range, negative in unsigned), a request with one error writes nothing, `TrgUnlock` 0x094 / `DebLen` 0x090; offsets of `c/app_regs.h` against `dummy_reg_t` (`_Static_assert`) |
 | `plot_wheel_sim.js` (node) | Mouse wheel over the scope: both axes, SHIFT, ALT, cursors, limits (57 checks) |
 | `ext_trig_reset_zoom_sim.js` (node) | Ext Trig → External + Normal; Reset zoom over the 10 time ranges (32 checks) |
-| `generator_test.py` (python3) | Logo with each renderer and fallback, no DEBUG/RELOAD packages, `config_tool.py` (modules → tcl, combo texts from muxers and `[names]`, `names_dic.txt`, `app.ini` changes, `--rename`), App name in the paths of `fpga.sh` / `nginx.conf` / `src/main.c` and `c/` without binaries (14 tests) |
+| `generator_test.py` (python3) | Logo with each renderer and fallback, no DEBUG/RELOAD packages, `config_tool.py` (modules → tcl, combo texts from muxers and `[names]`, `names_dic.txt`, `app.ini` changes, `--rename`), App name in the paths of `fpga.sh` / `nginx.conf` / `src/main.c` and `c/` without binaries, version / `-h` keys / no lock-in leftovers / 0.9x bitstream of the packages (15 tests) |
+| `remote_test.py` (python3) | `resources/streaming/stream_receiver.py --board` (get_ip, `stream_*` writes, `/streaming`, `stream_cmd` 0/1/0, received and decoded data) and `resources/remote_control/http_regs.py` against a mock board on localhost (4 tests) |
+| `lib_modules_tb.v` (`make hdl`, xsim) | `fun_icdf` (negative inputs and output sign), `fun_pico`, `gen_ramp` (limits, triggers, `outB`) of the library |
 
-Last run (2026-10-23, this checkpoint): auto-set ALL PASS, `test_tools.sh` ALL PASS, 57/57, 32/32, 14 tests OK.
+Last run (2026-10-23, this checkpoint): auto-set ALL PASS, `test_tools.sh` ALL PASS, 57/57, 32/32, 15 + 4 tests OK;
+`make hdl` LIB ERRORS=0.
 
 Other checks used during development (see the reports): `config_tool.py -a` twice on the template must leave it
 unchanged (idempotent); `make app` of a generated App with Linaro; `xvlog` + `xelab` (Vivado 2020.1 simulator) on
@@ -269,7 +276,7 @@ make -C my_app upload_bit                     # only red_pitaya.bit + fpga.bit.b
 make -C my_app upload_html                    # only index.html, css, js
 ```
 
-`upload` rebuilds `target/` if needed, replaces the App folder and sets `fpga.sh` to 755 (`dummy/Makefile:130-157`). It
+`upload` rebuilds `target/` if needed, replaces the App folder and sets `fpga.sh` to 755 (`dummy/Makefile:134-161`). It
 does **not** restart nginx: after the first upload of an App (or a change of its `nginx.conf`) restart it yourself (below)
 or use `upload_app.sh -r`.
 
@@ -302,7 +309,36 @@ Then open `http://rp-XXXXXX.local/my_app/` or the icon in the menu.
 
 ---
 
-## 6. Working on the generator itself
+## Ecosystem 0.9x/1.0
+
+The generated packages carry the files of both ecosystems: `fpga.sh` + `fpga.bit.bin` + `nginx.conf` for 2.0, and
+`fpga.conf` + `red_pitaya.bit` for 0.9x/1.0 (which load the file named in `fpga.conf` when the App starts). The C
+controller works with both oscilloscopes (2.0 and 0.9x) and the web page and `upload_app.sh` with both ecosystems.
+
+Two bitstreams can go in `red_pitaya.bit`:
+
+| | Vivado 2020.1 (default) | `make eco1` (Vivado 2015.2, optional) |
+|---|---|---|
+| Design | RedPitaya-FPGA Release_2026.1 structure, 2.0 scope | the original template design (`fpga_eco1/`), 0.9x scope, same `dummy.v` |
+| Longest time range | 68.7 s (decimation 524288) | 8.6 s (decimation 65536) |
+| Streaming (`c/streaming`), `TrgUnlock`/`DebLen` of `c/osc` | yes | no (0.9x scope) |
+| Tested on a 0.9x/1.0 board | no | no |
+
+```bash
+cd ~/rp/rp_my_app
+source settings.sh          # also loads Vivado 2015.2
+LANG=C make eco1            # my_app/red_pitaya_eco1.bit (about 5-6 min)
+LANG=C make                 # the packages now carry it as red_pitaya.bit (fpga.bit.bin for 2.0 does not change)
+LANG=C make clean_eco1      # back to the 2020.1 bitstream in the packages
+```
+
+Status: **built, not tested on a board with Ecosystem 0.9x/1.0** (no SD card with those versions was available). The
+known differences of the older ecosystems: `nginx.conf` uses the same Lua constructs as the lock-in Apps v0.3.x (which
+ran on 0.9x); `upload_app.sh` uses `/boot/sbin/rw` there; nginx must also be restarted for a new `nginx.conf`.
+
+---
+
+## 7. Working on the generator itself
 
 Layout of this repository:
 
@@ -317,6 +353,7 @@ Layout of this repository:
 | `resources/` | copied to every project: `logo.svg`/`logo.png`, helpers (`code_helpers/muxer_generator.py`, `gen_sin_cos.py`), `remote_control/` (`http_regs.py`, HTTP client of `/<App>/dummy` and `/osc`; plus the old SSH/paramiko scripts), `streaming/stream_receiver.py`, `rp_cmds/nginx.sh` |
 | `settings.sh` | environment, copied to every project |
 | `tests/` | host tests |
+| `CHANGELOG.md` | changes by version of the generator (`RP_DUMMY_VERSION` in `dummy/config_lib.py`, `new_project.py --version`) |
 | `doc/` | this documentation |
 
 After changing `config_lib.py`, `config_tool.py` or the docks of the template, run `dummy/config_tool.py -a` twice: the

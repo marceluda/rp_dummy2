@@ -80,3 +80,4 @@ __pycache__/
 
 # Host-side tests (make -C tests)
 tests/auto_set_harness
+tests/hdl_sim/

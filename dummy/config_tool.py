@@ -294,14 +294,6 @@ m.insert_reg("dummy_osc_ctrl",
                            )
              )
 
-m.insert_reg("dummy_osc_ctrl",
-             main_register(name="dummy_osc_lockin_mode", val=0, rw=True,
-                           nbits=1, group="scope",
-                           min_val=0, max_val=1, signed=False,
-                           desc="Set oscilloscope mode in lock-in (ch1 as R [V|int], ch2 as Phase [rad])",
-                           fpga_update=False
-                           )
-             )
 
 m.del_reg("dummy_osc_ctrl")
 
@@ -341,7 +333,6 @@ for i in m:
 h.guess_control_type()
 
 h['dummy_osc_raw_mode'   ].type   = 'button'
-h['dummy_osc_lockin_mode'].type   = 'button'
 
 h['dummy_oscA_sw'        ].type    = 'select'
 h['dummy_oscB_sw'        ].type    = 'select'
@@ -382,7 +373,6 @@ for r in h:
 h['dummy_osc1_filt_off'   ].control.text='Ch1'
 h['dummy_osc2_filt_off'   ].control.text='Ch2'
 h['dummy_osc_raw_mode'    ].control.text = 'Raw&nbsp;Mode'
-h['dummy_osc_lockin_mode' ].control.text = 'R|Phase&nbsp;Mode'
 
 # the 32 inputs of the scope muxers (in0..in31) are all usable: none is reserved
 

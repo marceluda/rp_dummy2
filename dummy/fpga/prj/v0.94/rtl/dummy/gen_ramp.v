@@ -6,8 +6,11 @@
 // before changing to the next value.
 // Outputs two signals, with a amplitud relation set by ramp_B_factor
 // 
-// Includes a relock system wich produce an exponential amplitud increasing signal
-// to find next closest lock condition.
+// outB = outA * ramp_B_factor / 4096 (registered: one clock after outA).
+//
+// rp_dummy2 1.0.0: the relock system of the lock-in Apps was removed (its module gen_ramp_relock is not in
+// this library) and the multiplier is a registered '*' (Vivado infers a DSP) instead of mult_dsp_14 (a Xilinx
+// core that is not in the project). Before, the module could not be synthesized.
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +22,6 @@ module gen_ramp #(parameter R=14)
     input         [32-1:0] ramp_step,
     input  signed [ R-1:0] ramp_low_lim,ramp_hig_lim,ramp_B_factor,
     input                  ramp_reset,ramp_enable,ramp_direction,
-    input                  relock_enable,out_of_lock,relock_reset,
     // outputs
     output                 trigger_low,
     output                 trigger_hig,
@@ -30,7 +32,7 @@ module gen_ramp #(parameter R=14)
     reg  signed [ R-1:0] ramp_signal;
     wire signed [ R-1:0] ramp_signal_next;
     // Second output
-    wire signed [28-1:0] outB_28;
+    reg  signed [2*R-1:0] outB_28;
     
     // Counter
     reg         [32-1:0] cnt;
@@ -49,34 +51,14 @@ module gen_ramp #(parameter R=14)
     reg  [32-1:0] ramp_direction_last, ramp_direction_now;
     wire          floor,ceil,slope_changed;
     
-    // relock system signals
-    wire signed [ R-1:0] relock_low_lim ,relock_hig_lim;
-    wire                 relock_run_ramp,relock_freeze_pids;
-    
     // Wires for ramp control
     wire signed [ R-1:0] low_lim,hig_lim;
     wire                 enable,direction;
     
-    assign  low_lim   = relock_enable & out_of_lock  ?  relock_low_lim  :  ramp_low_lim   ;
-    assign  hig_lim   = relock_enable & out_of_lock  ?  relock_hig_lim  :  ramp_hig_lim   ;
-    assign  direction = relock_enable & out_of_lock  ?  1'b0            :  ramp_direction ;
-    assign  enable    = relock_enable & out_of_lock  ?  relock_run_ramp :  ramp_enable    ;
-    
-    gen_ramp_relock #(.R(14)) i_gen_ramp_relock (
-        .clk(clk),  .rst(rst),
-        // inputs
-        .relock_on       ( relock_enable        ),
-        .out_of_lock     ( out_of_lock          ),
-        .ramp_A          ( outA                 ),
-        .ramp_trigger_in ( trigger_low          ),
-        .reset           ( relock_reset         ),
-        // outputs
-        .new_low_lim     ( relock_low_lim       ),
-        .new_hig_lim     ( relock_hig_lim       ),
-        .state_14        ( /* lolo */ ),
-        .run_ramp        ( relock_run_ramp      ),
-        .freeze_pids     ( relock_freeze_pids   ) 
-    );
+    assign  low_lim   = ramp_low_lim   ;
+    assign  hig_lim   = ramp_hig_lim   ;
+    assign  direction = ramp_direction ;
+    assign  enable    = ramp_enable    ;
     
     
 
@@ -162,13 +144,11 @@ module gen_ramp #(parameter R=14)
     // outputs
     assign outA    = ramp_signal ;
     
-    // assign outB_28  = $signed(ramp_signal) * $signed(ramp_B_factor) ;
+    always @(posedge clk)
+        if (rst) outB_28 <= {2*R{1'b0}} ;
+        else     outB_28 <= $signed(ramp_signal) * $signed(ramp_B_factor) ;
     
-    mult_dsp_14  i_mult_dps_error_pow (.CLK(clk), .A($signed(ramp_signal)) , .B($signed(ramp_B_factor)), .P(outB_28));
-    
-    assign outB     = $signed(outB_28[26:0]) >>> 12 ;
-    //assign outB     = relock_hig_lim ;
-    //assign outB     = { 8'b0 , ramp_step_changed, trigger, slope , go , direction , enable};
+    assign outB     = $signed(outB_28[2*R-2:0]) >>> 12 ;
     
 endmodule
 
@@ -182,10 +162,11 @@ gen_ramp #(.R(14)) NAME (
     .ramp_reset  (    1'b0    ),
     .ramp_enable (   1'b1     ),
     .ramp_direction(1'b1      ),
-    .ramp_B_factor (ramp_B_factor ),
+    .ramp_B_factor (14'sd4096 ),   // outB = outA * ramp_B_factor / 4096
     // outputs
-    .trigger     ( TRIG       ),
-    .outA        (  OUT       ),
-    .outB        (  OUT       ) 
+    .trigger_low ( TRIG_LOW   ),   // one tick when the ramp reaches ramp_low_lim
+    .trigger_hig ( TRIG_HIG   ),   // one tick when the ramp reaches ramp_hig_lim
+    .outA        (  OUT_A     ),
+    .outB        (  OUT_B     )
 );
 */

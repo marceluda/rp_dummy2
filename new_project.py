@@ -168,7 +168,7 @@ def generate(cfg, ini_path, project_dir, args):
 
         say('[2/6] Project files: Makefile, settings.sh, _settings.env, resources/, README.md, CHANGELOG.md, '
             'LICENSE, .gitignore')
-        values = {'APP': app, 'DATE': datetime.now().strftime('%Y-%m-%d')}
+        values = {'APP': app, 'DATE': datetime.now().strftime('%Y-%m-%d'), 'GEN_VERSION': config_lib.RP_DUMMY_VERSION}
         fill_template(PROJECT_FILES / 'Makefile',     tmp_dir / 'Makefile',     values)
         fill_template(PROJECT_FILES / 'README.md',    tmp_dir / 'README.md',    values)
         fill_template(PROJECT_FILES / 'CHANGELOG.md', tmp_dir / 'CHANGELOG.md', values)
@@ -201,7 +201,8 @@ def generate(cfg, ini_path, project_dir, args):
             f'    "name": "{app}",',
             '    "version": "0.1.0-BUILD_NUMBER",',
             '    "revision": "REVISION",',
-            '    "description": "Red Pitaya App generated with rp_dummy2 (dummy template: oscilloscope + custom FPGA module)."',
+            f'    "description": "Red Pitaya App generated with rp_dummy2 {config_lib.RP_DUMMY_VERSION} (dummy template: '
+            'oscilloscope + custom FPGA module)."',
             '}']), encoding='utf-8')
         edit_file(app_dir / 'upload_app.sh', [(r'^APP="dummy"', f'APP="{app}"')], count={r'^APP="dummy"': 1})
         # Ecosystem 2.0: paths of the bitstream and of the c/ tools in fpga.sh and nginx.conf, and the locations of
@@ -279,14 +280,29 @@ def main(argv=None):
                     'element of the web page, already connected to each other. The App is created as a\n'
                     'standalone project folder: OUTPUT/PROJECT/ (Makefile, settings.sh, resources/...)\n'
                     'with the App in OUTPUT/PROJECT/NAME/.',
-        epilog='control types in the .ini (one section per control, section name = register name):\n'
-               '  combo     select box, bits_number 1..8 (optional: options = a, b, c)\n'
-               '  number    integer input, bits_number 1..32, signed True/False\n'
-               '  checkbox  1 bit\n'
-               '  button    1 bit, toggles\n'
-               '  monitor   read only value shown with a bar, bits_number 1..32, signed True/False\n'
-               'optional keys: label, default (reset value); section [names]: texts of muxer inputs in the\n'
-               'combo boxes (wire = text).  See config.ini for an example.\n\n'
+        epilog='keys of the .ini (see config.ini for a commented example):\n'
+               '  [general]\n'
+               '    AppName        default App name (NAME overrides it)\n'
+               '    include_genfun False (the signal generator is not available in this version: always removed)\n'
+               '    include_pids   True/False: PID block of Red Pitaya (default False)\n'
+               '    register_map   fixed (default): template registers 0x000-0x0FC, controls from 0x100;\n'
+               '                   legacy: controls right after the template registers (old rp_dummy layout)\n'
+               '    rp_host, ssh_opts, scp_opts   board address and ssh/scp options for make upload (_settings.env)\n'
+               '  [<register name>]  one section per control, in the order of the registers:\n'
+               '    type           combo     select box, bits_number 1..8\n'
+               '                   number    integer input, bits_number 1..32\n'
+               '                   checkbox  1 bit\n'
+               '                   button    1 bit, toggles\n'
+               '                   monitor   read-only value with a bar, bits_number 1..32 (a wire you drive in dummy.v)\n'
+               '    label          text in the web page (default: the section name)\n'
+               '    bits_number    width of the register\n'
+               '    signed         True/False (number, monitor)\n'
+               '    default        reset value of the register (not for monitors)\n'
+               '    options        combo: texts of the values 0, 1, 2... (options = a, b, c); without it the\n'
+               '                   combo takes the input names of the muxer of dummy.v whose .sel it drives\n'
+               '    display        monitor: int (default), volts (raw/8192, unit V) or scaled (with scale)\n'
+               '    scale, unit    monitor: value shown = raw * scale, followed by unit (e.g. 8e-9 and s)\n'
+               '  [names]          optional: texts of muxer inputs in the combo boxes (wire = text)\n\n'
                'examples:\n'
                '  ./new_project.py -n -c my.ini my_app          check my.ini and show the register map\n'
                '  ./new_project.py -c my.ini -o ~/rp my_app     create ~/rp/rp_my_app/my_app/\n'
@@ -317,6 +333,7 @@ def main(argv=None):
                              'cairosvg, rsvg-convert, inkscape)')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='also show the output of config_tool.py')
+    parser.add_argument('--version', action='version', version=f'rp_dummy2 {config_lib.RP_DUMMY_VERSION}')
     args = parser.parse_args(argv)
 
     # .ini: as given, or next to this script if it is the default and not in the current folder

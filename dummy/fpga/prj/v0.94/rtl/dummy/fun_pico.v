@@ -31,7 +31,6 @@ module fun_pico
 
     assign pos = pos_absolute > 14'd2047 ? 11'd2047 : pos_absolute[11-1:0] ;
 
-    assign pos_abs = { 3'b0  , pos };
     //satprotect #(.Ri(15),.Ro(14),.SAT(14)) i_satprotect_pos_plus  ( .in(pos_plus),  .out(pos) );
 
     assign out_pico = pico[pos];

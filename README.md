@@ -20,16 +20,16 @@ Red Pitaya community applications, and it is the base of the lock-in Apps of the
 
 | | |
 |---|---|
-| Branch | `devel2.0`, checkpoint CP5 (on top of CP4_bis `8b80464`); pre-release, no version tag yet. Generated Apps start at `0.1.0` |
-| Red Pitaya OS | **Ecosystem 2.0** (tested on RedPitaya_OS 2.04-35 with STEMlab 125-14) and the older 0.9x/1.0 (packages carry `red_pitaya.bit` + `fpga.conf`; optional Vivado 2015.2 bitstream with `make eco1`; builds, not yet tested on a 0.9x/1.0 board) |
+| Version | **1.0.0** (branch `devel2.0`, checkpoint CP6; `./new_project.py --version`). Generated Apps start at `0.1.0` and record the generator version. See [CHANGELOG.md](CHANGELOG.md) |
+| Red Pitaya OS | **Ecosystem 2.0** (tested on RedPitaya_OS 2.04-35 with STEMlab 125-14) and the older 0.9x/1.0 (packages carry `red_pitaya.bit` + `fpga.conf`; optional Vivado 2015.2 bitstream with `make eco1`; builds, not yet tested on a 0.9x/1.0 board: [Devel.md](doc/Devel.md#ecosystem-09x10)) |
 | FPGA tools | Vivado 2020.1 (main design); Vivado 2015.2 only for `make eco1` |
 | C toolchain | Linaro `arm-linux-gnueabihf` 4.9 (2014.11 or 2015.02) |
 | Host | Linux, Python >= 3.8 (standard library only) |
 
 Every App carries remote control tools: command line tools in `<App>/c/` (registers of the App and of the scope by
 name, streaming of the scope over TCP), HTTP endpoints for them in its `nginx.conf` (`/<App>/dummy`, `/<App>/osc`,
-`/<App>/streaming`...) and PC-side examples in `resources/`. A short summary is in the README of every generated project;
-the full documentation ([doc/Remote.md](doc/Remote.md)) is still to be written.
+`/<App>/streaming`...) and PC-side examples in `resources/` (`stream_receiver.py --board` configures, starts and
+receives a streaming in one command): see [doc/Remote.md](doc/Remote.md).
 
 ## Quick start
 
@@ -53,7 +53,7 @@ Then open `http://rp-XXXXXX.local/my_app/`. `config.ini` in this folder is a com
 | [doc/Usage.md](doc/Usage.md) | `new_project.py` (options, `.ini` format, validation, exit codes) and the step-by-step procedure to build your own App, including the use of its web interface |
 | [doc/App.md](doc/App.md) | What a generated App contains: register map, oscilloscope (inputs, trigger, time ranges, mouse wheel, Raw Mode), outputs and the library of Verilog modules with instantiation examples |
 | [doc/Devel.md](doc/Devel.md) | Compilation (environment, Makefile targets, outputs, durations, timing), layout of a generated App, host tests and upload to the board |
-| [doc/Remote.md](doc/Remote.md) | Remote control (to be completed) |
+| [doc/Remote.md](doc/Remote.md) | Remote control: `c/dummy` and `c/osc` (registers by name), HTTP endpoints, streaming of the scope, Python examples |
 | [CHANGELOG.md](CHANGELOG.md) | Changes by version |
 
 ## Other resources

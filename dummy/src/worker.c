@@ -240,7 +240,7 @@ int rp_osc_set_meas_data(rp_osc_meas_res_t ch1_meas, rp_osc_meas_res_t ch2_meas)
 static const int rp_osc_acq_keys[] = {
     MIN_GUI_PARAM, MAX_GUI_PARAM, TRIG_MODE_PARAM, TRIG_SRC_PARAM, TRIG_EDGE_PARAM, TRIG_DLY_PARAM,
     TRIG_LEVEL_PARAM, TIME_RANGE_PARAM, TIME_UNIT_PARAM, EN_AVG_AT_DEC, PRB_ATT_CH1, GAIN_CH1, PRB_ATT_CH2,
-    GAIN_CH2, GEN_DC_OFFS_1, GEN_DC_OFFS_2, DUMMY_OSCA_SW, DUMMY_OSCB_SW, DUMMY_OSC_RAW_MODE, DUMMY_OSC_LOCKIN_MODE,
+    GAIN_CH2, GEN_DC_OFFS_1, GEN_DC_OFFS_2, DUMMY_OSCA_SW, DUMMY_OSCB_SW, DUMMY_OSC_RAW_MODE,
     -1 };
 
 static int rp_osc_acq_params_same(const rp_app_params_t *a, const rp_app_params_t *b)
@@ -788,10 +788,7 @@ int rp_osc_decimate(float **cha_signal, int *in_cha_signal,
                                            rp_calib_params->fe_ch2_dc_offs,
                                            ch2_user_dc_off);
 
-        if( rp_osc_params[DUMMY_OSC_LOCKIN_MODE].value>0 ){
-            cha_s[out_idx] = sqrt(cha_tmp*cha_tmp + chb_tmp*chb_tmp) ;
-            chb_s[out_idx] = atan2( chb_tmp , cha_tmp ) ;
-        } else if( rp_osc_params[DUMMY_OSC_RAW_MODE].value>0 ){
+        if( rp_osc_params[DUMMY_OSC_RAW_MODE].value>0 ){
 
             cha_s[out_idx] = osc_fpga_cnv_cnt_to_v(in_cha_signal[in_idx], (float)(1<<(c_osc_fpga_adc_bits-1)) , 0, 0);
             chb_s[out_idx] = osc_fpga_cnv_cnt_to_v(in_chb_signal[in_idx], (float)(1<<(c_osc_fpga_adc_bits-1)) , 0, 0);
@@ -876,10 +873,7 @@ int rp_osc_decimate_partial(float **cha_out_signal, int *cha_in_signal,
                                         rp_calib_params->fe_ch1_dc_offs,
                                         ch2_user_dc_off);
 
-        if( rp_osc_params[DUMMY_OSC_LOCKIN_MODE].value>0 ){
-            cha_out[next_out_idx] = sqrt(cha_tmp*cha_tmp + chb_tmp*chb_tmp) ;
-            chb_out[next_out_idx] = atan2( chb_tmp , cha_tmp ) ;
-        } else if( rp_osc_params[DUMMY_OSC_RAW_MODE].value>0 ){
+        if( rp_osc_params[DUMMY_OSC_RAW_MODE].value>0 ){
             cha_out[next_out_idx] = osc_fpga_cnv_cnt_to_v(cha_in_signal[in_idx], (float)(1<<(c_osc_fpga_adc_bits-1)) , 0, 0);
             chb_out[next_out_idx] = osc_fpga_cnv_cnt_to_v(chb_in_signal[in_idx], (float)(1<<(c_osc_fpga_adc_bits-1)) , 0, 0);
         } else {

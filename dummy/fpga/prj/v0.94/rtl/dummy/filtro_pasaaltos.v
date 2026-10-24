@@ -27,7 +27,7 @@ Definición del tiempo característico del pasaaltos (T=RC):
 
     T = 8 ns * 2**(TAU_OFFSET + tau)
 
-Para el valor por defecto TAU_OFFSET=14, la siguiente tabla muestra los
+Para el valor por defecto TAU_OFFSET=0, la siguiente tabla muestra los
 valores del tiempo característico T y la frecuencia de corte Freq
 para cada valor asignado al cable tau:
 
@@ -117,16 +117,16 @@ Ejemplos de instanciación:
 filtro_pasaaltos #(.R(14),.TAU_OFFSET(0)) i_filtro_pasaaltos_NAME (
     .clk(clk), .rst(rst), 
     // inputs
-    .tau( 14'd12   ), 
+    .tau( 4'd12    ),
     .dis( 1'b0     ), 
     .in(  IN       ),
     // outputs
     .out(  OUT     ) 
 );
 
-filtro_pasaaltos #(.R(14),.TAU_OFFSET(0)) i_filtro_pasaaltos_NAME (.clk(clk),.rst(rst), .tau( 14'd12   ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
+filtro_pasaaltos #(.R(14),.TAU_OFFSET(0)) i_filtro_pasaaltos_NAME (.clk(clk),.rst(rst), .tau( 4'd12    ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
 
-filtro_pasaaltos i_filtro_pasaaltos_NAME (.clk(clk),.rst(rst), .tau( 14'd12   ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
+filtro_pasaaltos i_filtro_pasaaltos_NAME (.clk(clk),.rst(rst), .tau( 4'd12    ), .dis( 1'b0 ), .in(  IN  ),.out(  OUT  ) );
 
 
 */

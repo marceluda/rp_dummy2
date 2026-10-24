@@ -1,6 +1,6 @@
 # @APP@
 
-Red Pitaya App generated on @DATE@ with [rp_dummy2](https://github.com/marceluda/rp_dummy) (`new_project.py`)
+Red Pitaya App generated on @DATE@ with [rp_dummy2](https://github.com/marceluda/rp_dummy) @GEN_VERSION@ (`new_project.py`)
 from the controls of `@APP@/app.ini`.
 
 ## Build
@@ -53,10 +53,15 @@ wrong (`ERROR: ...`, HTTP 400). The HTTP endpoints pass only register names and 
 
 **Streaming of the scope** (2.0 FPGA): `stream_ip` (a.b.c.d as `a + b*256 + c*65536 + d*16777216`), `stream_port`,
 `stream_rate` (decimation) and `stream_cmd` are registers of the dummy module at 0x054–0x060, not parameters of the
-web page. Start a receiver on the PC (`resources/streaming/stream_receiver.py -p 6000`), then
-`/<App>/dummy?stream_ip=...&stream_port=6000&stream_rate=128`, `/<App>/streaming`, `/<App>/dummy?stream_cmd=1`;
-stop with `stream_cmd=0` (also done when the App stops). While streaming, the web page scope does not refresh (the
-scope belongs to `c/stream_tcp_osc_cmd`). `resources/remote_control/http_regs.py` is an HTTP client example.
+web page. With the App open, the simplest way is
+`resources/streaming/stream_receiver.py --board rp-XXXXXX.local --app @APP@ -r 128 -n 10` (it writes the registers,
+starts the streaming, receives 10 s and stops it). By hand: start a receiver on the PC
+(`resources/streaming/stream_receiver.py -p 6000`), then `/<App>/dummy?stream_ip=...&stream_port=6000&stream_rate=128`,
+`/<App>/streaming`, `/<App>/dummy?stream_cmd=1`; stop with `stream_cmd=0` (also done when the App stops). **Each time
+the App is opened its FPGA is loaded again and the `stream_*` registers return to 0 / 6000 / 128 / 0: write
+`stream_ip` (and the others) again before streaming.** While streaming, the web page scope does not refresh (the
+scope belongs to `c/stream_tcp_osc_cmd`). `resources/remote_control/http_regs.py` is an HTTP client example. More in
+`doc/Remote.md` of rp_dummy2 (the generator).
 
 ## Upload
 
