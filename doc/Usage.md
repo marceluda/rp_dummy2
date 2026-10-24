@@ -1,6 +1,6 @@
 # Usage: create your own Red Pitaya App
 
-> Documented version: rp_dummy2 **1.0.0** (branch `devel2.0`, checkpoint CP6). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **1.0.1** (branch `devel2.0`, checkpoint CP6.1). Back to the [README](../README.md).
 > Related: [App.md](App.md) (what a generated App contains, registers, scope, Verilog modules),
 > [Devel.md](Devel.md) (build and upload), [Remote.md](Remote.md).
 
@@ -56,7 +56,7 @@ Python >= 3.8, standard library only (`new_project.py:25-26`). Run it from the r
 | `--no-icon` | | Do not render the logo: the App uses the generic `resources/logo.png` (the name is still written in `resources/logo.svg`) |
 | `--icon-tool` | `auto` | Tool that renders `resources/logo.svg`: `auto` = the first available of `cairosvg` (Python module), `rsvg-convert` (`librsvg2-bin`), `inkscape` |
 | `-v`, `--verbose` | | Also show the output of `config_tool.py -a` |
-| `--version` | | Print the version of the generator (`rp_dummy2 1.0.0`) |
+| `--version` | | Print the version of the generator (`rp_dummy2 1.0.1`) |
 
 `./new_project.py -h` also lists every key of the `.ini` (§2). The version of the generator is written in the
 `info/info.json` (description), `README.md` and `CHANGELOG.md` of every generated App.
@@ -585,7 +585,10 @@ taken on RP2 (Ecosystem 2.04-35) during the tests of CP4 and CP4_bis (`reportes/
 ![Reset zoom in Raw Mode: 0..1049 µs, Y -8192..8192](.Usage/reset_zoom_raw_mode.jpg)
 
 - **Trigger**: Auto (free running when there is no trigger), Normal (waits for the trigger), Single (one acquisition,
-  armed with the Single button). Level in V (counts in Raw Mode). Pre-trigger: move the window to negative times.
+  armed with the Single button). Level in V, or in ADC counts in Raw Mode (-8192..8191, the unit next to the box says
+  which; values out of range are limited; switching Raw Mode converts the level and the Y axis, so the trigger and
+  the view stay on the same part of the signal; AUTO in Raw Mode gives the level and the Y range in counts).
+  Pre-trigger: move the window to negative times.
 - **Ext Trig**: choosing a value other than None sets Source = External and Mode = Normal at once (also from Single);
   going back to None changes nothing else. Loading a configuration or restoring the page does not apply this rule.
 

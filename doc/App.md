@@ -1,6 +1,6 @@
 # App: what a generated App contains
 
-> Documented version: rp_dummy2 **1.0.0** (branch `devel2.0`, checkpoint CP6). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **1.0.1** (branch `devel2.0`, checkpoint CP6.1). Back to the [README](../README.md).
 > Related: [Usage.md](Usage.md) (how to create an App and use its web page), [Devel.md](Devel.md) (build, upload).
 
 Every App made by `new_project.py` is the template `dummy/` with your controls added. This page describes the fixed
@@ -221,8 +221,8 @@ parameter, `src/main.c:69-81`; units, `time_range_to_time_unit()`, `src/main.c:5
 | 9 | 524288 | 4.19 ms | 68.7 s | s |
 
 (Memory = 16384 × 8 ns × decimation.) The range 9 needs the 2.0 scope: with the bitstream of `make eco1` the longest
-window is 8.6 s. The X+/X- buttons move in 1-2-5 steps up to the 68.7 s limit (`index.html:3501`); the mouse wheel
-zooms between 20 ns and 68.7 s (`index.html:2274`). Verified on RP2 from 131 µs to 50-60 s windows
+window is 8.6 s. The X+/X- buttons move in 1-2-5 steps up to the 68.7 s limit (`index.html:3553`); the mouse wheel
+zooms between 20 ns and 68.7 s (`index.html:2292`). Verified on RP2 from 131 µs to 50-60 s windows
 (`reportes/dummy2/2026-10-23_cp4_retest.md`, F1).
 
 ### Trigger
@@ -232,15 +232,16 @@ zooms between 20 ns and 68.7 s (`index.html:2274`). Verified on RP2 from 131 µs
 | Mode (`trig_mode`) | 0 Auto, 1 Normal, 2 Single | Auto: free running when there is no trigger |
 | Source (`trig_source`) | 0 Channel 1, 1 Channel 2, 2 External | |
 | Edge (`trig_edge`) | 0 rising, 1 falling | Also for External |
-| Level (`trig_level`) | -8192..8191 counts (V in the page) | Channel sources |
+| Level (`trig_level`) | V in the page (normalized volts × scale of the channel); **ADC counts in Raw Mode** | Channel sources. The scope compares 14-bit counts: in Raw Mode the controller writes the counts as they are (`rp_osc_trig_level_v()`, `src/worker.c:261`; before 1.0.1 they were taken as volts and saturated at ±8191). Switching Raw Mode converts the level in the page |
 
 Pre-trigger: windows with negative times show samples before the trigger (only those really acquired since the arm,
 `we_cnt`). Scope parameters that do not change the acquisition (e.g. your controls) do not re-arm it, so a step made
 from the page can trigger a waiting Normal acquisition (`reportes/dummy2/2026-10-22_cp3_1_cp4.md`, issue B).
 
 **AUTO** (auto-set, `src/worker.c`): looks for a signal in both channels, sets Normal on the channel that has it, the
-level and a window with some periods, among the 10 time ranges; with a DC signal it sets Auto. Every wait has a time
-limit (it cannot hang the App or nginx; host regression test `tests/auto_set_harness.c`).
+level and a window with some periods, among the 10 time ranges; with a DC signal it sets Auto. In Raw Mode the level
+and the Y range are in counts. Every wait has a time limit (it cannot hang the App or nginx; host regression test
+`tests/auto_set_harness.c`).
 
 ### External trigger
 
@@ -250,7 +251,7 @@ mask: the scope receives `|(trigger_signals & trig_sw)`, registered, **as a leve
 selector works with External and the scope debounces it (100 µs, register `0x90`).
 
 To add a source, connect your 1-bit signal to a free bit of `trigger_signals` and add the option to the Ext Trig select
-of `index.html` by hand, with value `2^bit` (2, 4, 8 ... 128; comment in `index.html:4220-4221`). The template has
+of `index.html` by hand, with value `2^bit` (2, 4, 8 ... 128; comment in `index.html:4377-4378`). The template has
 `None` (0) and `Pin` (1).
 
 In the page, choosing an Ext Trig other than None sets Source = External and Mode = Normal in the same request

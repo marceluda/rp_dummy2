@@ -1,6 +1,6 @@
 # Remote: remote control of a generated App
 
-> Documented version: rp_dummy2 **1.0.0** (branch `devel2.0`, checkpoint CP6). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **1.0.1** (branch `devel2.0`, checkpoint CP6.1). Back to the [README](../README.md).
 > Related: [App.md](App.md) (register map), [Devel.md](Devel.md) (build, upload, safety notes).
 
 Every App made by `new_project.py` can be controlled without its web page, the same way as the lock-in Apps
@@ -165,15 +165,22 @@ waiting for the Red Pitaya on port 6000 ...
 connected from 192.168.1.30; writing data.bin
       976563 samples      976.4 kS/s
 ...
-rp-XXXXXX.local: stream_cmd = 0
+rp-XXXXXX.local: stream_cmd = 0, receiving the last samples ...
 9765632 samples in 10.0 s (976.5 kS/s)
   CH1   -128   CH2    128
 ```
 
 It listens on the port, asks the board for the address of the PC (`/get_ip`), writes `stream_ip`, `stream_port` and
-`stream_rate`, starts `c/streaming` (`/streaming`), sets `stream_cmd=1`, receives for `-n` seconds (or until Ctrl-C or
-the board closing) and sets `stream_cmd=0`. Since it writes the registers on every run, the reset of the registers
-when the App is opened again does not matter.
+`stream_rate`, starts `c/streaming` (`/streaming`), sets `stream_cmd=1` and receives for `-n` seconds (or until Ctrl-C).
+Then it sets `stream_cmd=0` (from a second thread, while it keeps reading: if nobody reads the socket during the
+HTTP request, the board waits in `send()` and its scope buffer is overwritten, `overrun`/`lost` in its log) and keeps
+receiving until the board closes the connection, so the last samples are not lost and the board ends cleanly (before
+1.0.1 it closed the socket first: "Broken pipe" in the log of the board). `--rcvbuf BYTES` sets the receive buffer of
+the socket; by default Linux tunes it by itself (8 MiB only if `net.core.rmem_max` allows it). Ctrl-C does the same as
+the time limit (a second Ctrl-C ends at once, after one more short `stream_cmd=0` if the first was not confirmed; Ctrl-C before
+the data starts ends at once with exit status 130). If
+the board ends first, it also sets `stream_cmd=0`. Since it writes the registers on every run, the reset of the
+registers when the App is opened again does not matter.
 
 ### By hand
 

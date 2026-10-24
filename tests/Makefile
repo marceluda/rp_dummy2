@@ -1,7 +1,7 @@
 # Host-side regression tests of the template (no Red Pitaya, no cross compiler, no Vivado).
 #
 #   make          build and run every test
-#   make c        auto_set_harness and test_tools.sh only
+#   make c        auto_set_harness, trig_level_test and test_tools.sh only
 #   make js       web page simulations (node)
 #   make py       generator and remote control script tests (python3)
 #   make hdl      optional, not in "make": library modules in the Vivado 2020.1 simulator (xsim)
@@ -11,9 +11,11 @@
 # trigger level of a sawtooth/square/DC, time limits (no hang without trigger), quit during AUTO.
 # plot_wheel_sim.js: mouse wheel over the scope (no key both axes, SHIFT time only, ALT Y only, cursors, limits).
 # ext_trig_reset_zoom_sim.js: Ext Trig sets Source External + Mode Normal; Reset zoom (one memory at the current Dec).
+# raw_trigger_sim.js: units of the trigger level in the page (volts, counts in Raw Mode, switching Raw converts).
 # generator_test.py: logo (cairosvg / rsvg-convert / inkscape / fallback), no DEBUG/RELOAD, config_tool.py
 # (modules -> tcl, combo texts from muxers and [names], c/names_dic.txt, app.ini changes, --rename),
 # App name in the paths of fpga.sh / nginx.conf / src/main.c, c/ without binaries.
+# trig_level_test: Raw Mode trigger level (counts -> threshold register) with the real dummy/src/fpga.c.
 # test_tools.sh: c/dummy and c/osc built for the PC on a sparse file instead of /dev/mem (reads, writes,
 # errors, ranges), and the offsets of app_regs.h against the register struct of the controller.
 # remote_test.py: resources/streaming/stream_receiver.py (--board) and resources/remote_control/http_regs.py
@@ -36,11 +38,15 @@ auto_set_harness: auto_set_harness.c $(SRC)/worker.c $(wildcard $(SRC)/*.h)
 
 run: c js py
 
-c: auto_set_harness
+trig_level_test: trig_level_test.c $(SRC)/fpga.c $(SRC)/fpga.h
+	$(CC) $(CFLAGS) -o $@ trig_level_test.c $(SRC)/fpga.c -lm
+
+c: auto_set_harness trig_level_test
 	$(TIMEOUT) ./auto_set_harness
+	$(TIMEOUT) ./trig_level_test
 	$(TIMEOUT) ./test_tools.sh
 
-JS_SIMS = plot_wheel_sim.js ext_trig_reset_zoom_sim.js
+JS_SIMS = plot_wheel_sim.js ext_trig_reset_zoom_sim.js raw_trigger_sim.js
 
 js:
 	@command -v $(NODE) > /dev/null || { echo "node not found: web page simulations skipped"; exit 0; } ; \
@@ -65,4 +71,4 @@ hdl:
 	grep "LIB ERRORS" hdl_sim/xsim.log ; grep -q "LIB ERRORS=0" hdl_sim/xsim.log
 
 clean:
-	rm -rf auto_set_harness hdl_sim
+	rm -rf auto_set_harness trig_level_test hdl_sim

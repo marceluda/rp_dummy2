@@ -54,6 +54,14 @@ float osc_fpga_cnv_cnt_to_v(int cnts, float adc_max_v, int calib_dc_off, float u
     if(m & 0x2000) m = -((m ^ 0x3FFF) + 1);
     return m * adc_max_v / 8192.0;
 }
+/* same formula as dummy/src/fpga.c (tested against the real osc_fpga_cnv_v_to_cnt() in trig_level_test.c) */
+float osc_fpga_cnv_cnt_to_trig_v(float cnts, float adc_max_v, int calib_dc_off, float user_dc_off)
+{
+    float c = roundf(cnts);
+    if(c > 8191) c = 8191;
+    if(c < -8192) c = -8192;
+    return (c + calib_dc_off) * (2*adc_max_v) / 16384.0f + user_dc_off;
+}
 int osc_fpga_update_params(int trig_imm, int trig_source, int trig_edge, float trig_delay, float trig_level,
                            int time_range, float ch1_adc_max_v, float ch2_adc_max_v, int ch1_calib_dc_off,
                            float ch1_user_dc_off, int ch2_calib_dc_off, float ch2_user_dc_off, int ch1_probe_att,
@@ -170,6 +178,36 @@ int main(void)
     r = run_auto(&dt);
     CHECK(r == 0 || r == RP_OSC_AUTO_FAILED, "ends (%d: forced acquisitions, no period -> slow range) in %.2f s, does not hang", r, dt);
     CHECK(dt < 12.0, "bounded time (%.2f s)", dt);
+
+    printf("T9 AUTO in Raw Mode on a sawtooth +-8000 (CH1): level and Y range in counts\n");
+    m_level_never = 0; set_signal(0, 1, 8000, 1000); set_signal(1, 0, 0, 1);
+    rp_osc_params[DUMMY_OSC_RAW_MODE].value = 1;
+    r = run_auto(&dt);
+    CHECK(r == 0 && P[TRIG_MODE_PARAM].value == 1, "returns 0, mode Normal (%d, mode %g): the level trigger fired", r, P[TRIG_MODE_PARAM].value);
+    CHECK(fabs(P[TRIG_LEVEL_PARAM].value) < 200 && P[TRIG_LEVEL_PARAM].value == roundf(P[TRIG_LEVEL_PARAM].value * 2) / 2,
+          "level in counts (a half-integer) near the middle of the sawtooth (%g counts)", P[TRIG_LEVEL_PARAM].value);
+    CHECK(P[MIN_Y_NORM].value < -9000 && P[MAX_Y_NORM].value > 9000,
+          "Y range in counts, +-8000 * 1.2 (%g .. %g; the limits of min_y/max_y_norm in main.c are +-20000)",
+          P[MIN_Y_NORM].value, P[MAX_Y_NORM].value);
+    rp_osc_params[DUMMY_OSC_RAW_MODE].value = 0;
+
+    printf("T10 trigger level for the FPGA (rp_osc_trig_level_v): volts as they are, Raw counts converted\n");
+    {
+        static rp_app_params_t Q[PARAMS_NUM+1];
+        float v;
+        memset(Q, 0, sizeof(Q));
+        calib.fe_ch1_dc_offs = 12; calib.fe_ch2_dc_offs = -7;
+        Q[TRIG_LEVEL_PARAM].value = 0.25;
+        v = rp_osc_trig_level_v(Q, 1.0);
+        CHECK(fabsf(v - 0.25f) < 1e-6, "volts mode: 0.25 V -> %g (unchanged)", v);
+        Q[DUMMY_OSC_RAW_MODE].value = 1; Q[TRIG_LEVEL_PARAM].value = 100;
+        v = rp_osc_trig_level_v(Q, 1.0);
+        CHECK(fabsf(v - 112.0f / 8192) < 1e-6, "Raw, CH1: 100 counts (calib 12) -> %g V = 112/8192 (before: 100 V -> 8191)", v);
+        Q[TRIG_SRC_PARAM].value = 1; Q[GEN_DC_OFFS_2].value = 0.5; Q[TRIG_LEVEL_PARAM].value = -3;
+        v = rp_osc_trig_level_v(Q, 2.0);
+        CHECK(fabsf(v - (-10.0f * 2 / 8192 + 0.5f)) < 1e-6, "Raw, CH2: -3 counts (calib -7, user offset 0.5 V, 2 V full scale) -> %g V", v);
+        calib.fe_ch1_dc_offs = 0; calib.fe_ch2_dc_offs = 0;
+    }
 
     printf("T8 AUTO with a scope that never triggers (dead)\n");
     m_dead = 1;

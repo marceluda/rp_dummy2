@@ -254,6 +254,22 @@ static int rp_osc_acq_params_same(const rp_app_params_t *a, const rp_app_params_
     return 1;
 }
 
+/* Trigger level for osc_fpga_update_params(), which converts volts to ADC counts with adc_max_v: the param
+ * trig_level is in normalized volts, or in Raw Mode (dummy_osc_raw_mode) in raw ADC counts, as the page shows
+ * them; then it is turned into the voltage that gives exactly those counts (rp_dummy2 1.0.1: before, the counts
+ * were taken as volts and the threshold saturated at +-8191) */
+float rp_osc_trig_level_v(rp_app_params_t *p, float adc_max_v)
+{
+    float lev = p[TRIG_LEVEL_PARAM].value;
+    if(p[DUMMY_OSC_RAW_MODE].value > 0) {
+        int ch1 = (p[TRIG_SRC_PARAM].value == 0);   /* osc_fpga_update_params(): CH1 values for source 0 */
+        lev = osc_fpga_cnv_cnt_to_trig_v(lev, adc_max_v,
+                                         ch1 ? rp_calib_params->fe_ch1_dc_offs : rp_calib_params->fe_ch2_dc_offs,
+                                         ch1 ? p[GEN_DC_OFFS_1].value : p[GEN_DC_OFFS_2].value);
+    }
+    return lev;
+}
+
 /* Streaming of the scope in progress: stream_cmd of the dummy module != 0 (c/dummy, HTTP /dummy). Then
  * c/stream_tcp_osc_cmd owns the scope (it resets, arms and reads it): the worker must not touch it. */
 static int rp_osc_streaming(void)
@@ -415,7 +431,7 @@ void *rp_osc_worker_thread(void *args)
                                        */
                                       /*curr_params[TRIG_DLY_PARAM].value,*/
                                       curr_params[MIN_GUI_PARAM].value,
-                                      curr_params[TRIG_LEVEL_PARAM].value,
+                                      rp_osc_trig_level_v(curr_params, max_adc_norm),
                                       curr_params[TIME_RANGE_PARAM].value,
                                       max_adc_norm, max_adc_norm,
                                       rp_calib_params->fe_ch1_dc_offs,
@@ -1167,13 +1183,9 @@ int rp_osc_auto_set(rp_app_params_t *orig_params,
         TRACE("AUTO: trig level: %d\n", trig_level);
         TRACE("AUTO: min,max: %d  %d\n", min_y, max_y);
 
-        if(rp_osc_params[DUMMY_OSC_RAW_MODE].value>0){ // LOLO
-            trig_level_v = (((trig_level) * max_adc_v)/
-                            (float)(1<<(c_osc_fpga_adc_bits-1))) ;
-        }else{
-            trig_level_v = (((trig_level + calib_dc_off) * max_adc_v)/
-                            (float)(1<<(c_osc_fpga_adc_bits-1))) ;
-        }
+        /* trig_level is in raw ADC counts (min/max of the samples) in both modes: the voltage that gives exactly
+         * those counts (before, in Raw Mode the calibration offset was left out) */
+        trig_level_v = osc_fpga_cnv_cnt_to_trig_v(trig_level, max_adc_v, calib_dc_off, 0);
         int loc_max = INT_MIN;
         int loc_min = INT_MAX;
 

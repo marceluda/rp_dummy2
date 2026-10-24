@@ -4,6 +4,42 @@ Versions of the generator (`new_project.py`, `config_tool.py` and the `dummy/` t
 prints it; it is `RP_DUMMY_VERSION` in `dummy/config_lib.py`. Each generated App keeps its own version (`0.1.0` when it
 is created, in `<App>/info/info.json`) and records the version of the generator that made it.
 
+## 1.0.1 (2026-10-23, branch `devel2.0`, CP6.1)
+
+- **Raw Mode trigger level in ADC counts** (bug of every earlier version): the controller wrote the level as volts
+  (100 counts → threshold 8191: Normal never triggered; AUTO's level saturated too), the page limited it to ±1 and AUTO
+  in Raw Mode clipped the Y range to ±1000. Now the level is in counts in Raw Mode everywhere: `rp_osc_trig_level_v()`
+  (`src/worker.c`) + `osc_fpga_cnv_cnt_to_trig_v()` (`src/fpga.c`, the inverse of `osc_fpga_cnv_v_to_cnt()`), the
+  page (input, slider, drag, limits -8192..8191), switching Raw Mode converts the level, AUTO uses the calibration
+  offset also in Raw Mode, Y range of AUTO in counts (not scaled, limits ±20000). Volts mode unchanged.
+- Page, Raw Mode: the unit of the Level box says "counts"; levels out of range are limited before sending (the
+  controller corrected them); switching Raw Mode converts the Y axis too (an autoscale 0.8 s later used the old
+  trace: ±9000 "V" after a Raw AUTO).
+- Config load sets the X axis of the plot to the window of the config, converted to the time units of the plot (it
+  kept the old window and sent it). When a reply of the server changes the time units, the numbers of the X axis (and the
+  window of the next POST) are converted once, from the units the axis is in (`x_axis_tu`), however many replies
+  carry the change and in whatever order (with split POSTs the last reply could have `forcex_flag` 0: the label
+  changed, the axis was 1000x off; a second conversion put it 1000x off the other way). The Y axis is reset as Reset
+  zoom does (±1 V, ±8192 in Raw Mode), once: a config that changes Raw Mode is not converted again by the Raw
+  switch (it gave ±0.000122 V / ±67108864 counts).
+- `stream_receiver.py --board`: `stream_cmd = 0` first, sent from a second thread while it keeps reading (the HTTP
+  request inside the receive loop made the board wait in `send()`: overruns, up to 88208 lost samples), then it
+  receives until the board closes the connection (it closed first: "Broken pipe" on the board and the last samples
+  lost); `--rcvbuf`. Ctrl-C only sets a flag checked once per pass of the loop (a KeyboardInterrupt between `recv()`
+  and the write lost the segment just received); a second Ctrl-C ends at once, with one more short `stream_cmd = 0` (1 s) if the stop was not
+  confirmed; the setup requests run in a thread, so a Ctrl-C during them (slow name resolution of the board) ends at
+  once with a message and exit status 130 (no traceback); no `stream_cmd = 0` is sent if the
+  board was never reached, and the program exits at once (it waited ~5 s, at the shutdown of Python, for a thread
+  blocked resolving a `.local` name that does not exist).
+- `c/stream_tcp_osc_cmd`: when `stream_cmd` is already 0, the jump of the write counter caused by the controller
+  taking the scope back is not counted as an overrun (each streaming ended with one `overrun #1` and `lost` > 0); the
+  block is dropped as `end_drop`, as before.
+- Config load: keys unknown to the App (e.g. the parameter removed in 1.0.0 in an old config) are not sent (the
+  controller logged "Parameter ... not found"); listed with `console.debug`.
+- Tests: `tests/trig_level_test.c` (real `fpga.c`), `tests/raw_trigger_sim.js`, Raw Mode cases in
+  `auto_set_harness.c`, clean stop and reading during the stop in `remote_test.py`, config load X axis in
+  `ext_trig_reset_zoom_sim.js`.
+
 ## 1.0.0 (2026-10-23, branch `devel2.0`)
 
 First version for Red Pitaya **Ecosystem 2.0**, made in checkpoints CP1–CP6 (tested on a STEMlab 125-14 with

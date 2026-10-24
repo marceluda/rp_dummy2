@@ -187,6 +187,8 @@
   last_disp_units=false;
   var monitor_bar_tsp = 0;               // [ms] last update of the monitor bars (every 300 ms)
   var last_raw_mode;                     // Raw Mode state shown in the Y axis title
+  var x_axis_tu;                         // time units of the numbers of the X axis (see xAxisToUnits())
+  var raw_y_keep = false;                // config load: a Raw Mode change does not convert the Y axis (see display_update())
 
   // List of params to save/load
   config_params_txts = 'xmin,xmax,trig_mode,trig_source,trig_edge,trig_delay,trig_level,time_range,time_units,en_avg_at_dec,min_y,'+
@@ -309,16 +311,16 @@
         $(this).parent().removeClass('input-group');
 
         var tlev = parseLocalFloat($(this).val());
-        var scale = (params.local.trig_source == 0 ? params.local.scale_ch1 : params.local.scale_ch2);
         if(! isNaN(tlev)) {
-          params.local.trig_level = tlev / scale;
+          params.local.trig_level = pageToTrigLevel(tlev, params.local, params.original);
+          $(this).val(floatToLocalString(roundLevel(trigLevelToPage(params.local.trig_level, params.local))));   // limited
           updateTriggerSlider(undefined, false);
           redrawPlot();
           sendParams();
         }
         else {
-          tlev = params.local.trig_level * scale;
-          $(this).val(tlev)
+          tlev = trigLevelToPage(params.local.trig_level, params.local);
+          $(this).val(floatToLocalString(roundLevel(tlev)));
         }
         user_editing = false;
       })
@@ -1323,6 +1325,9 @@
     $(input_buttons).on('click', function() {
       $(this).toggleClass('btn-default btn-primary');
       params.local[this.id] = ($(this).is('.btn-primary') ? 1 : 0);
+      // Raw Mode: the trigger level is in ADC counts; switching converts it, so the trigger stays where it was
+      if(this.id === 'dummy_osc_raw_mode' && params.local.trig_level !== undefined)
+        params.local.trig_level = trigLevelForRaw(params.local.trig_level, params.local, params.local[this.id] == 1);
       sendParams();
     });
 
@@ -1483,7 +1488,19 @@
     // Y axis title of the scope; after a change of Raw Mode the traces come in other units: autoscale
     if(set_raw !== last_raw_mode) {
       $('#ytitle').text(set_raw ? 'Raw [ counts ]' : 'Voltage [ V ]');
-      if(last_raw_mode !== undefined) setTimeout(autoscaleY, 800);
+      $('#trig_lev_units').text(set_raw ? 'counts' : 'V');
+      // (not when the change comes from a config load: it already set Y for the new mode; converting it again gave
+      // +-0.000122 V or +-67108864 counts, CP6.1 retest 4)
+      if(last_raw_mode !== undefined && plot && !raw_y_keep) {
+        // same part of the signal in the new units (see yRangeForRaw())
+        var ya = plot.getAxes().yaxis;
+        var yr = yRangeForRaw(ya.min, ya.max, params.original || params.local, set_raw);
+        resetZoomY(yr[0], yr[1]);
+        plot.setupGrid();
+        plot.draw();
+        updateRanges();
+        updateTriggerSlider();
+      }
       last_raw_mode = set_raw;
     }
 
@@ -2183,6 +2200,7 @@
 
   function initPlot(init_params) {
     var plot_holder = $('#plot_holder');
+    x_axis_tu = Number(init_params.time_units);   // the axis starts in the units of the server
     var ymax = init_params.gui_reset_y_range / 2;
     var ymin = ymax * -1;
 
@@ -2277,6 +2295,37 @@
   // Time units of the plot (params.local.time_units: 0 us, 1 ms, 2 s) per second
   function timeUnitFactor(tu) {
     return Math.pow(10, 3 * (2 - tu));
+  }
+
+  // The time units of the page change (a reply of the server with other time_units): the numbers of the X axis are
+  // converted, so it keeps showing the same window (rp_dummy2 1.0.1). The server signals a change with forcex_flag
+  // and its xmin/xmax, but with split POSTs (config load) only the last reply is read and its forcex_flag can be 0
+  // already: the label changed and the numbers stayed (axis 1000x off). The units the axis numbers are in are kept
+  // in x_axis_tu (set by initPlot() and here): the conversion is always from x_axis_tu to new_tu, so calling this
+  // again for the same change (loadParams(), updateTimeUnits(), replies in any order) does nothing (before, old_tu
+  // came from params.original.time_units, which a POST could set back to the old units: converted twice, 1000x off
+  // the other way). old_tu is only used before the plot exists. Before the axis is set from a reply (forceX, AUTO)
+  // the units are updated first (updateTimeUnits()), so the server window then replaces the converted one.
+  function xAxisToUnits(old_tu, new_tu) {
+    new_tu = Number(new_tu);
+    if(!plot || !(new_tu >= 0 && new_tu <= 2)) return false;
+    var from = (x_axis_tu >= 0 && x_axis_tu <= 2) ? Number(x_axis_tu) : Number(old_tu);
+    x_axis_tu = new_tu;
+    if(!(from >= 0 && from <= 2) || from == new_tu) return false;
+    var k = Math.pow(1000, from - new_tu);     // e.g. us (0) -> ms (1): / 1000
+    var o = plot.getOptions();
+    if(isFinite(o.xaxes[0].min) && o.xaxes[0].min !== null) o.xaxes[0].min *= k;
+    if(isFinite(o.xaxes[0].max) && o.xaxes[0].max !== null) o.xaxes[0].max *= k;
+    // the window that the next POST sends (params.local.xmin/xmax) is converted too: a POST never carries numbers
+    // of the old units (the server reads them in its current units)
+    [params.local, params.original].forEach(function(q) {
+      if(!q) return;
+      if(isFinite(q.xmin) && q.xmin !== null) q.xmin *= k;
+      if(isFinite(q.xmax) && q.xmax !== null) q.xmax *= k;
+    });
+    plot.setupGrid();
+    plot.draw();
+    return true;
   }
 
   // X window of the plot (current time units) into params.local.xmin/xmax for the server. It used to be rounded with
@@ -2570,6 +2619,8 @@
 
     // Ignore xmin/xmax values received from server. That values must be used only on AUTO button click
     // and on ForceX flag, but that is done before the sendParams() function is called.
+    // (If the server changed the time units, the axis is converted first: xAxisToUnits().)
+    if(params.original && orig_params.time_units !== undefined) xAxisToUnits(params.original.time_units, orig_params.time_units);
     if(plot) {
       var options = plot.getOptions();
       if(options.xaxes[0].min && options.xaxes[0].max) {
@@ -2594,8 +2645,7 @@
     $('#trig_mode').val(params.original.trig_mode);
     $('#trig_source').val(params.original.trig_source);
     $('#trig_edge').val(params.original.trig_edge);
-    var scale = (params.original.trig_source == 0 ? params.original.scale_ch1 : params.original.scale_ch2);
-    $('#trig_level').val(floatToLocalString(roundLevel(params.original.trig_level * scale)));
+    $('#trig_level').val(floatToLocalString(roundLevel(trigLevelToPage(params.original.trig_level, params.original))));
 
     if ((refresh_counter++ % meas_panel_dec) == 0) {
         $('#info_ch1_min').html(floatToLocalString(shortenFloat(params.original.meas_min_ch1)));
@@ -2722,6 +2772,8 @@
       return;
     }
 
+    // The X axis numbers are in the units of the page: convert them when the server changes the units
+    if(params.original) xAxisToUnits(params.original.time_units, new_params.time_units);
     params.original.time_units = params.local.time_units = new_params.time_units;
 
     var timeu_lbl = (params.original.time_units == 0 ? 'μs' : (params.original.time_units == 1 ? 'ms' : 's'));
@@ -2911,6 +2963,7 @@
         if(auto_flag == 1 && dresult.datasets.params.min_y !== dresult.datasets.params.max_y) {
           var options = plot.getOptions();
 
+          if(params.original) updateTimeUnits(dresult.datasets.params);   // (units first: no double conversion)
           options.xaxes[0].min = dresult.datasets.params.xmin;
           options.xaxes[0].max = dresult.datasets.params.xmax;
           options.yaxes[0].min = dresult.datasets.params.min_y;
@@ -2931,6 +2984,7 @@
 
         if(auto_flag == 0 && dresult.datasets.params.forcex_flag == 1) {
           var options = plot.getOptions();
+          if(params.original) updateTimeUnits(dresult.datasets.params);   // (units first: no double conversion)
 
           options.xaxes[0].min = dresult.datasets.params.xmin;
           options.xaxes[0].max = dresult.datasets.params.xmax;
@@ -2945,7 +2999,7 @@
         // params.original keeps the old ones and the next sendParams() (doGetData / send_que) resends them
         else if(params.original) {
           for(var sk in send_params) {
-            if(sk in params.original) params.original[sk] = send_params[sk];
+            if((sk in params.original) && sk !== 'time_units') params.original[sk] = send_params[sk];   // (units: of the server)
           }
         }
         //console.log('lock_error_offset: '+dresult.datasets.params["lock_error_offset"]);
@@ -3044,9 +3098,8 @@
   // Add a data series for the trigger level line
   function addTriggerDataSet(dsets) {
 
-    // Transform trigger level to real values
-    var scale = (params.local.trig_source == 0 ? params.local.scale_ch1 : params.local.scale_ch2);
-    var tlev = params.local.trig_level * scale;
+    // Transform trigger level to real values (V, or counts in Raw Mode)
+    var tlev = trigLevelToPage(params.local.trig_level, params.local);
 
     // Don't add trigger dataset if trigger level is outside the visible area...
     if(plot) {
@@ -3416,8 +3469,8 @@
         y = evt.clientY - this.getBoundingClientRect().top - plot.getPlotOffset().top;
       }
 
-      var scale = (params.local.trig_source == 0 ? params.local.scale_ch1 : params.local.scale_ch2);
-      params.local.trig_level = parseFloat(plot.getAxes().yaxis.c2p(y).toFixed(trigger_level_xdecimal_places)) / scale;
+      params.local.trig_level = pageToTrigLevel(parseFloat(plot.getAxes().yaxis.c2p(y).toFixed(trigger_level_xdecimal_places)),
+                                                params.local, params.original);
 
       updateTriggerSlider();
       redrawPlot();
@@ -3437,13 +3490,12 @@
     var canvas = $('#trigger_canvas')[0];
     var context = canvas.getContext('2d');
     var plot_offset = plot.getPlotOffset();
-    var ymax = params.original.gui_reset_y_range / 2;
-    var ymin = ymax * -1;
+    // Limits of the level: +-gui_reset_y_range/2 V, or the 14-bit range in Raw Mode (before CP6.1 also +-1 there)
+    var lim  = trigLevelLimits(params.local, params.original);
+    var ymin = lim[0], ymax = lim[1];
 
-    // Transform trigger level to real values
-    // TODO: local or original params?
-    var scale = (params.local.trig_source == 0 ? params.local.scale_ch1 : params.local.scale_ch2);
-    var tlev = params.local.trig_level * scale;
+    // Transform trigger level to real values (V, or counts in Raw Mode)
+    var tlev = trigLevelToPage(params.local.trig_level, params.local);
 
     // If trigger level is outside the predefined ymin/ymax, change the level
 
@@ -3709,6 +3761,56 @@
   }
 
   // Trigger level shown in its field: 4 decimals (e.g. the level computed by AUTO, 0.000244140625 -> 0.0002)
+  // [RAW TRIGGER BEGIN] Units of the trigger level (pure functions, also run by tests/raw_trigger_sim.js).
+  // Param trig_level: normalized volts (the page shows it multiplied by the scale of the trigger channel), or ADC
+  // counts in Raw Mode (dummy_osc_raw_mode = 1; the controller writes them to the scope as they are, src/worker.c).
+  function trigRaw(p) { return !!(p && Number(p.dummy_osc_raw_mode)); }
+  function trigLevelScale(p) {
+    if(trigRaw(p)) return 1;
+    var s = Number(p && (p.trig_source == 0 ? p.scale_ch1 : p.scale_ch2));
+    return (s > 0 && isFinite(s)) ? s : 1;
+  }
+  // page value (V or counts) -> trig_level param, limited to trigLevelLimits(p, q) (the controller corrected
+  // out-of-range levels and logged "Incorrect parameters value"), and back
+  function pageToTrigLevel(v, p, q) {
+    var lim = trigLevelLimits(p, q);
+    v = Math.min(Math.max(Number(v), lim[0]), lim[1]);
+    return trigRaw(p) ? Math.round(v) : v / trigLevelScale(p);
+  }
+  function trigLevelToPage(level, p) { return Number(level) * trigLevelScale(p); }
+  // limits of the level in page units: +-gui_reset_y_range/2 V (of q, the server values, if given) or -8192..8191
+  function trigLevelLimits(p, q) {
+    if(trigRaw(p)) return [-8192, 8191];
+    var y = Number((q || p).gui_reset_y_range) / 2;
+    if(!(y > 0) || !isFinite(y)) y = 1;
+    return [-y, y];
+  }
+  // trig_level when Raw Mode is switched (counts <-> normalized V), so the scope triggers at the same point:
+  // counts = V_norm * 8192 / max_norm, with max_norm = (gui_reset_y_range / 2) / max(scale_ch1, scale_ch2)
+  // (the ADC full scale at gain 1, as src/main.c get_scales())
+  function rawCountsPerVolt(p) {
+    var smax = Math.max(Number(p.scale_ch1) || 0, Number(p.scale_ch2) || 0);
+    var maxnorm = (smax > 0) ? Number(p.gui_reset_y_range) / 2 / smax : 1;
+    if(!(maxnorm > 0) || !isFinite(maxnorm)) maxnorm = 1;
+    return 8192 / maxnorm;
+  }
+  function trigLevelForRaw(level, p, to_raw) {
+    var v = Number(level), k = rawCountsPerVolt(p);
+    if(!isFinite(v)) return 0;
+    return to_raw ? Math.max(-8192, Math.min(8191, Math.round(v * k))) : v / k;
+  }
+  // Y range of the plot when Raw Mode is switched (counts <-> volts at the scale of the page, with the same factor;
+  // the scale of the channels is 1 with the LV jumpers and probe x1): the plot keeps showing the same part of the
+  // signal. Before, an autoscale 0.8 s later used the last trace, still in the old units (e.g. +-9000 V after a
+  // Raw AUTO). Returns [ymin, ymax].
+  function yRangeForRaw(ymin, ymax, p, to_raw) {
+    var smax = Math.max(Number(p.scale_ch1) || 0, Number(p.scale_ch2) || 0, 1e-12);
+    var k = rawCountsPerVolt(p) / smax;      // counts per volt shown (V shown = V_norm * scale)
+    if(!(isFinite(ymin) && isFinite(ymax) && ymax > ymin)) return to_raw ? [-8192, 8192] : [-1, 1];
+    return to_raw ? [ymin * k, ymax * k] : [ymin / k, ymax / k];
+  }
+  // [RAW TRIGGER END]
+
   function roundLevel(v) {
     return (typeof v == 'number' && isFinite(v)) ? +v.toFixed(4) : v;
   }
@@ -3836,6 +3938,40 @@
 
   }
 
+  // [CONFIG KEYS BEGIN] (pure function, also run by tests/raw_trigger_sim.js)
+  // Keys of a saved configuration that are sent to the controller: the saved params of this version
+  // (config_params_keys), the display keys (keep) and any param the controller has (orig: params.original, e.g.
+  // the controls of app.ini). A config of an older version (e.g. the lock-in display mode removed in 1.0.0) or of
+  // another App made the controller log "Parameter ... not found, ignoring it" for each unknown key: they are
+  // dropped here (listed with console.debug, to find them when debugging a config).
+  function configKnownKeys(data, keys, keep, orig) {
+    var out = {}, dropped = [];
+    for(var k in data) {
+      if((keys && keys.indexOf(k) >= 0) || (keep && keep.indexOf(k) >= 0) || (orig && orig[k] !== undefined))
+        out[k] = data[k];
+      else
+        dropped.push(k);
+    }
+    if(dropped.length && typeof console !== 'undefined' && console.debug)
+      console.debug('config load: keys not known by this App, not sent: ' + dropped.join(', '));
+    return out;
+  }
+  // X window of a saved config (xmin/xmax in its time_units: 0 us, 1 ms, 2 s) in the time units cur_tu of the
+  // plot: { xmin, xmax, time_units: cur_tu }, or null if the config has no valid window. The plot axis and the
+  // POST that follows use the current units, the server answers with forceX if they must change (as after a zoom).
+  // (1.0.1 retest: the numbers were taken as they were, 0..130 us loaded as 0..130 ms.)
+  function configXWindow(cfg, cur_tu) {
+    var x0 = Number(cfg.xmin), x1 = Number(cfg.xmax);
+    if(!(isFinite(x0) && isFinite(x1) && x1 > x0)) return null;
+    var tu = Number(cfg.time_units), ct = Number(cur_tu);
+    if(!(tu >= 0 && tu <= 2)) tu = ct;
+    if(!(ct >= 0 && ct <= 2)) ct = tu;
+    if(!(ct >= 0 && ct <= 2)) return { xmin: x0, xmax: x1, time_units: cfg.time_units };
+    var k = Math.pow(1000, tu - ct);          // e.g. config in ms (1), plot in us (0): x 1000
+    return { xmin: x0 * k, xmax: x1 * k, time_units: ct };
+  }
+  // [CONFIG KEYS END]
+
   function config_load_storage(name){
     // check support
     if (typeof(Storage) == "undefined") {
@@ -3881,8 +4017,29 @@
     user_editing = true;
     //sending = true;
 
-    // load into params
-    loadParams(params.storage[num].data);
+    // load into params (only the keys this App knows: see configKnownKeys())
+    var cfg = configKnownKeys(params.storage[num].data, config_params_keys, display_keep_keys, params.original);
+    // X window of the config on the plot first: loadParams() takes xmin/xmax from the plot axis (the server values
+    // are ignored there), so before the axis kept the old window (e.g. 0..1048 us with a config of 0..130 us)
+    // (converted to the time units of the plot: configXWindow())
+    var xw = configXWindow(cfg, (x_axis_tu >= 0 && x_axis_tu <= 2) ? x_axis_tu : (params.original || params.local || {}).time_units);
+    if(plot && xw) {
+      cfg.xmin = xw.xmin; cfg.xmax = xw.xmax; cfg.time_units = xw.time_units;
+      var xo = plot.getOptions();
+      xo.xaxes[0].min = xw.xmin;
+      xo.xaxes[0].max = xw.xmax;
+      plot.setupGrid();
+      plot.draw();
+    }
+    // Y axis as Reset zoom (+-1 V, or +-8192 counts if the config is in Raw Mode): a wheel zoom of before is not kept
+    if(plot) {
+      var yw = resetZoomWindow(cfg, 0);
+      resetZoomY(yw.ymin, yw.ymax);
+      plot.setupGrid();
+      plot.draw();
+    }
+    raw_y_keep = true;      // the Y axis set above is already in the units of the config (Raw Mode or not)
+    try { loadParams(cfg); } finally { raw_y_keep = false; }
     // A POST in flight: its response must not overwrite the config (empty unsent_base -> all its values are
     // unsent changes until the queued sendParams(.., send_all) sends them)
     if(sending) unsent_base = {};

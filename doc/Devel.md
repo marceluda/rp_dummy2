@@ -1,6 +1,6 @@
 # Devel: compiling, testing and uploading
 
-> Documented version: rp_dummy2 **1.0.0** (branch `devel2.0`, checkpoint CP6). Back to the [README](../README.md).
+> Documented version: rp_dummy2 **1.0.1** (branch `devel2.0`, checkpoint CP6.1). Back to the [README](../README.md).
 > Related: [Usage.md](Usage.md) (generate an App, `config_tool.py`), [App.md](App.md) (registers, scope, modules).
 
 Contents:
@@ -193,7 +193,7 @@ Vivado (`tests/Makefile`).
 
 ```bash
 make -C tests            # everything (about 13 s)
-make -C tests c          # auto_set_harness and test_tools.sh only
+make -C tests c          # auto_set_harness, trig_level_test and test_tools.sh only
 make -C tests js         # web page simulations (skipped if node is not installed)
 make -C tests py         # generator and remote control script tests
 make -C tests hdl        # optional (Vivado 2020.1 xsim, ~30 s, not part of "make"): library modules
@@ -201,16 +201,18 @@ make -C tests hdl        # optional (Vivado 2020.1 xsim, ~30 s, not part of "mak
 
 | Test | Covers |
 |---|---|
-| `auto_set_harness.c` (gcc) | AUTO of `dummy/src/worker.c` with a mock scope: 2.0 sample decoding, trigger level of sawtooth / square / DC, time limits (no hang without trigger), quit during AUTO |
+| `auto_set_harness.c` (gcc) | AUTO of `dummy/src/worker.c` with a mock scope: 2.0 sample decoding, trigger level of sawtooth / square / DC, time limits (no hang without trigger), quit during AUTO; Raw Mode: level and Y range in counts, `rp_osc_trig_level_v()` |
+| `trig_level_test.c` (gcc, real `dummy/src/fpga.c`) | Raw Mode trigger level: every 14-bit level, full scale and offset gives the same counts in the threshold register |
 | `test_tools.sh` (gcc) | `c/dummy` and `c/osc` built for the PC over a sparse file instead of `/dev/mem`: reads, writes, hex, sign, errors (name, read only, range, negative in unsigned), a request with one error writes nothing, `TrgUnlock` 0x094 / `DebLen` 0x090; offsets of `c/app_regs.h` against `dummy_reg_t` (`_Static_assert`) |
 | `plot_wheel_sim.js` (node) | Mouse wheel over the scope: both axes, SHIFT, ALT, cursors, limits (57 checks) |
-| `ext_trig_reset_zoom_sim.js` (node) | Ext Trig → External + Normal; Reset zoom over the 10 time ranges (32 checks) |
+| `ext_trig_reset_zoom_sim.js` (node) | Ext Trig → External + Normal; Reset zoom over the 10 time ranges; config load sets the X axis, also across time units; a reply that changes the time units converts the X axis once, also with repeated / out-of-order replies and split POSTs (every POST in the units of the server); config load resets the Y axis, also when it changes Raw Mode (V ↔ Raw, no double conversion); a Raw toggle of the user still converts Y (45 checks) |
+| `raw_trigger_sim.js` (node) | Units of the trigger level (volts, counts in Raw Mode, limits, switching Raw Mode), Y limits of the controller, config load without unknown keys, levels limited before sending, Y axis converted when Raw Mode is switched, units label (34 checks) |
 | `generator_test.py` (python3) | Logo with each renderer and fallback, no DEBUG/RELOAD packages, `config_tool.py` (modules → tcl, combo texts from muxers and `[names]`, `names_dic.txt`, `app.ini` changes, `--rename`), App name in the paths of `fpga.sh` / `nginx.conf` / `src/main.c` and `c/` without binaries, version / `-h` keys / no lock-in leftovers / 0.9x bitstream of the packages (15 tests) |
-| `remote_test.py` (python3) | `resources/streaming/stream_receiver.py --board` (get_ip, `stream_*` writes, `/streaming`, `stream_cmd` 0/1/0, received and decoded data) and `resources/remote_control/http_regs.py` against a mock board on localhost (4 tests) |
+| `remote_test.py` (python3) | `resources/streaming/stream_receiver.py --board` (get_ip, `stream_*` writes, `/streaming`, `stream_cmd` 0/1/0, received and decoded data, clean stop: `stream_cmd=0` first and every sample until the board closes, the socket is read while the stop request is answered: the mock board measures how long it waits in `send()`; Ctrl-C (SIGINT) ×3 without losing data, double Ctrl-C (also with a slow stop request: one more short stop) and Ctrl-C during the setup, also during a slow name resolution, without traceback and without waiting) and `resources/remote_control/http_regs.py` against a mock board on localhost (10 tests) |
 | `lib_modules_tb.v` (`make hdl`, xsim) | `fun_icdf` (negative inputs and output sign), `fun_pico`, `gen_ramp` (limits, triggers, `outB`) of the library |
 
-Last run (2026-10-23, this checkpoint): auto-set ALL PASS, `test_tools.sh` ALL PASS, 57/57, 32/32, 15 + 4 tests OK;
-`make hdl` LIB ERRORS=0.
+Last run (2026-10-23, this checkpoint): auto-set ALL PASS, `trig_level_test` and `test_tools.sh` ALL PASS, 57/57,
+45/45, 34/34, 15 + 10 tests OK; `make hdl` LIB ERRORS=0.
 
 Other checks used during development (see the reports): `config_tool.py -a` twice on the template must leave it
 unchanged (idempotent); `make app` of a generated App with Linaro; `xvlog` + `xelab` (Vivado 2020.1 simulator) on

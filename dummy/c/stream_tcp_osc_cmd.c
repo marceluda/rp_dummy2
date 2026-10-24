@@ -458,6 +458,11 @@ int main(int argc, char **argv){
             uint32_t we_post = FPGA_RD(WeCnt);
             if( we_b != WE_SAT && we_post != WE_SAT && we_post >= we_b ){
                 long long n_bad = (long long)we_post - (long long)(OSC_FPGA_SIG_LEN - WP_GUARD) - (long long)s0;
+                // stream_cmd already 0 (read after WeCnt): the controller is taking the scope back and
+                // reconfigures it (WeCnt jumps; it waits >= 50 ms after stream_cmd = 0, so a jump seen here comes
+                // after the stop): not an overrun; the check below drops the block as end_drop (rp_dummy2 1.0.1)
+                if( n_bad > 0 && StreamCmd && FPGA_RD(StreamCmd) == 0 )
+                    break;
                 if( n_bad > 0 ){
                     if( n_bad > (long long)m ) n_bad = (long long)m;
                     memmove(&buf_i[b0], &buf_i[b0 + n_bad], (m - (unsigned long)n_bad) * sizeof(buf_i[0]));
