@@ -262,6 +262,10 @@ dm.add( fpga_reg(name='slow_out4'          , index= 17, rw=False, nbits=12,signe
 dm.add( fpga_reg(name='oscA'               , index= 18, rw=False, nbits=14,signed=True ) )
 dm.add( fpga_reg(name='oscB'               , index= 19, rw=False, nbits=14,signed=True ) )
 dm.add( fpga_reg(name='read_ctrl'          , index= 20, rw=True , nbits= 3,signed=False) )
+dm.add( fpga_reg(name='stream_ip'          , index= 21, rw=True , nbits=32,signed=False) )
+dm.add( fpga_reg(name='stream_port'        , index= 22, rw=True , nbits=32,signed=False) )
+dm.add( fpga_reg(name='stream_rate'        , index= 23, rw=True , nbits=17,signed=False) )
+dm.add( fpga_reg(name='stream_cmd'         , index= 24, rw=True , nbits=32,signed=False) )
 # [REGSET DOCK END]
 
 

@@ -202,6 +202,35 @@ typedef struct dummy_reg_t {
       */
     uint32_t read_ctrl;
 
+    /** @brief Offset 20'h00054 - stream_ip
+      *  Client IP for streaming (a.b.c.d = a + b<<8 + c<<16 + d<<24)
+      *
+      *  bits [31: 0] - Data
+      */
+    uint32_t stream_ip;
+
+    /** @brief Offset 20'h00058 - stream_port
+      *  Client TCP port for streaming
+      *
+      *  bits [31: 0] - Data
+      */
+    uint32_t stream_port;
+
+    /** @brief Offset 20'h0005C - stream_rate
+      *  Decimation of the scope while streaming
+      *
+      *  bits [31:17] - Reserved
+      *  bits [16: 0] - Data
+      */
+    uint32_t stream_rate;
+
+    /** @brief Offset 20'h00060 - stream_cmd
+      *  Streaming command (!= 0: streaming on)
+      *
+      *  bits [31: 0] - Data
+      */
+    uint32_t stream_cmd;
+
 
 } dummy_reg_t;
 
@@ -227,6 +256,10 @@ _Static_assert(offsetof(dummy_reg_t, slow_out4) == 0x044, "dummy_reg_t.slow_out4
 _Static_assert(offsetof(dummy_reg_t, oscA) == 0x048, "dummy_reg_t.oscA must be at 0x048");
 _Static_assert(offsetof(dummy_reg_t, oscB) == 0x04C, "dummy_reg_t.oscB must be at 0x04C");
 _Static_assert(offsetof(dummy_reg_t, read_ctrl) == 0x050, "dummy_reg_t.read_ctrl must be at 0x050");
+_Static_assert(offsetof(dummy_reg_t, stream_ip) == 0x054, "dummy_reg_t.stream_ip must be at 0x054");
+_Static_assert(offsetof(dummy_reg_t, stream_port) == 0x058, "dummy_reg_t.stream_port must be at 0x058");
+_Static_assert(offsetof(dummy_reg_t, stream_rate) == 0x05C, "dummy_reg_t.stream_rate must be at 0x05C");
+_Static_assert(offsetof(dummy_reg_t, stream_cmd) == 0x060, "dummy_reg_t.stream_cmd must be at 0x060");
 // [FPGAREG DOCK END]
 
 

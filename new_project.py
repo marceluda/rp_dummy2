@@ -55,6 +55,18 @@ TEMPLATE_IGNORE = shutil.ignore_patterns(
     'vivado*.log', 'vivado*.jou', '*.jou', 'usage_statistics_webtalk.*', 'red_pitaya.bit',
     'fpga.bit', 'fpga.bit.bin', 'fpga.bif')
 
+# binaries of the c/ tools (if the template was built in place)
+C_TOOLS = {'dummy', 'osc', 'streaming', 'stream_tcp_osc_cmd'}
+
+
+def template_ignore(directory, names):
+    """Files of the template folder that are not copied: build products, and the c/ tool binaries"""
+    ignored = set(TEMPLATE_IGNORE(directory, names))
+    if os.path.basename(directory) == 'c':
+        ignored |= C_TOOLS & set(names)
+    return ignored
+
+
 class GenerationError(Exception):
     """Error while creating the App (the temporary folder is removed)"""
 
@@ -123,17 +135,20 @@ def print_register_map(cfg):
     base = 0x40600000
     if cfg.register_map == 'fixed':
         first = 4 * config_lib.USER_REGS_INDEX
-        say('Register map (fixed): template registers at 0x000-0x0FC (read_ctrl 0x050), controls from 0x100')
+        say('Register map (fixed): template registers at 0x000-0x0FC (read_ctrl 0x050, streaming stream_ip/port/rate/cmd '
+            '0x054-0x060), controls from 0x100')
     else:
         first = 0x050   # after the 20 template registers 0x000-0x04C; read_ctrl goes after the controls
-        say('Register map (legacy): controls after the template registers, read_ctrl after the controls')
+        say('Register map (legacy): controls after the template registers, read_ctrl and stream_* after the controls')
     say(f'  {"address":<12s} {"offset":<7s} {"register":<16s} {"type":<9s} {"bits":>4s}  {"range":<26s} label')
     for i, c in enumerate(cfg.controls):
         off = first + 4 * i
         rng = f'{c.min} .. {c.max}'
         say(f'  0x{base + off:08X}   0x{off:03X}   {c.name:<16s} {c.type:<9s} {c.nbits:4d}  {rng:<26s} {c.label}')
     if cfg.register_map == 'legacy':
-        say(f'  0x{base + first + 4*len(cfg.controls):08X}   0x{first + 4*len(cfg.controls):03X}   read_ctrl')
+        for k, n in enumerate(('read_ctrl', 'stream_ip', 'stream_port', 'stream_rate', 'stream_cmd')):
+            off = first + 4 * (len(cfg.controls) + k)
+            say(f'  0x{base + off:08X}   0x{off:03X}   {n}')
 
 
 # ------------------------------------------------------------------------------------------------
@@ -149,7 +164,7 @@ def generate(cfg, ini_path, project_dir, args):
     try:
         say(f'[1/6] Copying the template {TEMPLATE_APP} -> {app}/')
         tmp_dir.mkdir(parents=True)
-        shutil.copytree(TEMPLATE_APP, app_dir, ignore=TEMPLATE_IGNORE, symlinks=True)
+        shutil.copytree(TEMPLATE_APP, app_dir, ignore=template_ignore, symlinks=True)
 
         say('[2/6] Project files: Makefile, settings.sh, _settings.env, resources/, README.md, CHANGELOG.md, '
             'LICENSE, .gitignore')
@@ -189,10 +204,15 @@ def generate(cfg, ini_path, project_dir, args):
             '    "description": "Red Pitaya App generated with rp_dummy2 (dummy template: oscilloscope + custom FPGA module)."',
             '}']), encoding='utf-8')
         edit_file(app_dir / 'upload_app.sh', [(r'^APP="dummy"', f'APP="{app}"')], count={r'^APP="dummy"': 1})
-        # Ecosystem 2.0: path of the bitstream loaded by fpga.sh, and the locations of nginx.conf
-        edit_file(app_dir / 'fpga.sh', [(r'/opt/redpitaya/www/apps/dummy/fpga\.bit\.bin', f'/opt/redpitaya/www/apps/{app}/fpga.bit.bin')],
-                  count={r'/opt/redpitaya/www/apps/dummy/fpga\.bit\.bin': 1})
-        edit_file(app_dir / 'nginx.conf', [(r'^(location = )/dummy/', rf'\g<1>/{app}/')], count={r'^(location = )/dummy/': 2})
+        # Ecosystem 2.0: paths of the bitstream and of the c/ tools in fpga.sh and nginx.conf, and the locations of
+        # the endpoints of nginx.conf
+        edit_file(app_dir / 'fpga.sh', [(r'/opt/redpitaya/www/apps/dummy/', f'/opt/redpitaya/www/apps/{app}/')],
+                  count={r'/opt/redpitaya/www/apps/dummy/': 2})
+        edit_file(app_dir / 'nginx.conf', [(r'^(location = )/dummy/', rf'\g<1>/{app}/'),
+                                           (r'/opt/redpitaya/www/apps/dummy/', f'/opt/redpitaya/www/apps/{app}/')])
+        # folder of the c/ streaming tools that the controller stops when the App exits
+        edit_file(app_dir / 'src' / 'main.c', [(r'^(#define APP_DIR ")/opt/redpitaya/www/apps/dummy"', rf'\g<1>/opt/redpitaya/www/apps/{app}"')],
+                  count={r'^(#define APP_DIR ")/opt/redpitaya/www/apps/dummy"': 1})
 
         say(f'[4/6] FPGA blocks of Red Pitaya: signal generator {"included" if cfg.include_genfun else "removed (bus stub)"}, '
             f'PIDs {"included" if cfg.include_pids else "removed (bus stub)"}')

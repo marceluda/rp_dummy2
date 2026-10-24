@@ -55,6 +55,8 @@ class fpga_register():
         self.signed      = signed
         self.group       = group
         self.write_def   = True
+        self.no_param    = False  # not a parameter of the C controller (e.g. stream_*: written by the c/ tools)
+        self.rd_copy     = False  # read-only signal: the bus reads its registered copy <name>_rd
         self.c_update    = None
         self.main_reg    = None
         self.reg_read    = False
@@ -124,8 +126,8 @@ class fpga_registers():
         if not os.path.isdir(folder):
             raise ValueError('"folder" variable should be the source code folder path.')
         os.chdir(folder)
-        update_verilog(fpga_mod_fn,dock=['WIREREG','FPGA MEMORY'],
-                       txt=[fpga_defs(self),fpga_reg_write(self)+fpga_reg_read(self)])
+        update_verilog(fpga_mod_fn,dock=['WIREREG','BUS READ COPIES','FPGA MEMORY'],
+                       txt=[fpga_defs(self),fpga_rd_copies(self),fpga_reg_write(self)+fpga_reg_read(self)])
 
     def set_py_global_config(self):
         print('set_py_global_config(): configuration of python scripts for remote comunication')
@@ -228,6 +230,8 @@ class main_registers():
         for r in [ y for y in filter(lambda x: ( x.c_update==None and x.fpga_reg!=None) , self) ]:
             r.c_update='(float)g_dummy_reg->{:20s}'.format(r.fpga_reg)
         for r in f:
+            if r.no_param:
+                continue
             if r.c_update==None:
                 r.main_reg='dummy_'+r.name
                 r.c_update='(int)params[{:30s}].value'.format( self[r.main_reg].cdef )
@@ -696,63 +700,83 @@ def fpga_reg_write(f,indent=1):
     return txt.out()
 
 
+def rd_name(r):
+    """Name of the signal read by the bus for register r"""
+    if r.reg_read:
+        return r.name+'_reg'
+    if r.rd_copy:
+        return r.name+'_rd'
+    return r.name
+
+
+def fpga_rd_copies(f,indent=1):
+    """Registered copies of the read-only signals, read by the bus (from rp_lock-in_pid_h v2.3.17)"""
+    txt=txt_buff(n=indent)
+    regs=[ r for r in f if r.rd_copy ]
+    txt.add('// Registered copies of the read-only signals (wires). The bus reads them instead of the wires, so every')
+    txt.add('// input of the read mux of sys_rdata is a register of this clock domain (no long combinational path of')
+    txt.add('// the design ends in sys_rdata). They are held while a read is requested (sys_ren: 2 clocks with the')
+    txt.add('// address stable in the 2.0 bus; multicycle constraint in prj/v0.94/sdc/red_pitaya.xdc).')
+    for r in regs:
+        if r.nbits==1:
+            txt.add('reg                  {:}_rd;'.format(r.name))
+        else:
+            txt.add('reg  {:6s} [{:>2d}-1:0] {:}_rd;'.format('signed' if r.signed else '', r.nbits, r.name))
+    txt.add('always @(posedge clk) if (!sys_ren) begin')
+    txt.indent_plus()
+    for r in regs:
+        txt.add('{:<20s} <= {:};'.format(r.name+'_rd', r.name))
+    txt.indent_minus()
+    txt.add('end')
+    return txt.out()
+
+
 def fpga_reg_read(f,indent=1):
-    """Print FPGA-to-Processor verliog design"""
+    """Print FPGA-to-Processor verliog design (from rp_lock-in_pid_h v2.3.17)"""
     txt=txt_buff(n=indent)
 
     txt.add('//---------------------------------------------------------------------------------')
     txt.add('// FPGA --> MEMORIA --> SO')
+    txt.add('// sys_rdata only changes while a read is requested (sys_ren) and then holds its value. The PS side')
+    txt.add('// of the bus (sys_bus_cdc, clock fclk[0]) samples sys_rdata some cycles after sys_ack, asynchronously')
+    txt.add('// to clk (adc_clk): a sys_rdata reloaded every cycle with a changing signal could give a mix of bits.')
     txt.add('wire sys_en;')
     txt.add('assign sys_en = sys_wen | sys_ren;')
     txt.nl()
     txt.add('always @(posedge clk, posedge rst)')
     txt.add("if (rst) begin")
-
     txt.indent_plus()
     txt.add("sys_err <= 1'b0  ;")
     txt.add("sys_ack <= 1'b0  ;")
     txt.indent_minus()
-
     txt.add("end else begin")
     txt.indent_plus()
     txt.add("sys_err <= 1'b0 ;")
+    txt.add("sys_ack <= sys_en;")
     txt.nl()
-    txt.add("casez (sys_addr[19:0])")
-
+    txt.add("if (sys_ren) begin")
     txt.indent_plus()
-
+    txt.add("casez (sys_addr[19:0])")
+    txt.indent_plus()
     for r in f:
+        name = rd_name(r)
         if r.nbits==32:
-            txt.add("{:3s} : begin sys_ack <= sys_en;  sys_rdata <= {:>45}   ;".format(
-                    r.addr , (r.name+'_reg' if r.reg_read else r.name )
-                    ).ljust(95)
-                    +" end // {:}".format(inline(r.desc))
-              )
+            txt.add("{:5s} : sys_rdata <= {:>45}   ;".format(r.addr, name).ljust(73)+" // {:}".format(inline(r.desc)))
         elif r.nbits==1:
-            txt.add(
-                    "{:5s} : begin sys_ack <= sys_en;  sys_rdata <=".format(r.addr)+
-                    " {  31'b0  ".ljust(28)+
-                    ",  {:>15s}  }};".format( (r.name+'_reg' if r.reg_read else r.name ) ) +
-                    " end // {:}".format(inline(r.desc))
-                    )
+            txt.add("{:5s} : sys_rdata <=".format(r.addr)+" {  31'b0  ".ljust(28)+
+                    ",  {:>15s}  }};".format(name)+" // {:}".format(inline(r.desc)))
+        elif r.signed:
+            txt.add("{:5s} : sys_rdata <=".format(r.addr)+
+                    " {{  {{{:>2d}{{{:s}[{:d}]}}}} ".format(32-r.nbits, name, r.nbits-1).ljust(28)+
+                    ",  {:>15s}  }};".format(name)+" // {:}".format(inline(r.desc)))
         else:
-            if r.signed:
-                txt.add(
-                        "{:5s} : begin sys_ack <= sys_en;  sys_rdata <=".format(r.addr)+
-                        " {{  {{{:>2d}{{{:s}[{:d}]}}}} ".format(32-r.nbits, (r.name+'_reg' if r.reg_read else r.name ), r.nbits-1).ljust(28)+
-                        ",  {:>15s}  }};".format( (r.name+'_reg' if r.reg_read else r.name ) ) +
-                        " end // {:}".format(inline(r.desc))
-                        )
-            else:
-                txt.add(
-                        "{:5s} : begin sys_ack <= sys_en;  sys_rdata <=".format(r.addr)+
-                        " {{  {:>2d}'b0 ".format(32-r.nbits).ljust(28)+
-                        ",  {:>15s}  }};".format(  (r.name+'_reg' if r.reg_read else r.name )  ) +
-                        " end // {:}".format(inline(r.desc))
-                        )
-    txt.add("default   : begin sys_ack <= sys_en;  sys_rdata <=  32'h0        ; end")
+            txt.add("{:5s} : sys_rdata <=".format(r.addr)+" {{  {:>2d}'b0 ".format(32-r.nbits).ljust(28)+
+                    ",  {:>15s}  }};".format(name)+" // {:}".format(inline(r.desc)))
+    txt.add("default   : sys_rdata <=  32'h0        ;")
     txt.indent_minus()
     txt.add("endcase")
+    txt.indent_minus()
+    txt.add("end")
     txt.indent_minus()
     txt.add("end")
 
@@ -838,7 +862,9 @@ def main_update_fpga(f,indent=1):
     """Print parameters FPGA update in C controller"""
     txt=txt_buff(n=indent)
     for r in f:
-        if r.rw:
+        if r.no_param:
+            txt.add_comment('g_dummy_reg->{:25s}   (not a controller parameter: written by the c/ tools)'.format(r.name))
+        elif r.rw:
             txt.add('g_dummy_reg->{:25s} = {:25s};'.format(r.name,r.c_update) )
         else:
             txt.add_comment('g_dummy_reg->{:25s} = {:25s};'.format(r.name,r.c_update) )
@@ -1462,8 +1488,8 @@ CONTROL_TYPES = {
 # 0x000-0x0FC is reserved for the registers of the template (see config_tool.py).
 USER_REGS_INDEX = 0x100 // 4
 
-# Names already used in dummy.v / the C controller / the web page by the template, or reserved
-# for registers of next versions (cnt_clk, stream_*)
+# Names already used in dummy.v / the C controller / the web page / the c/ tools by the template
+# (stream_*), or reserved for registers of next versions (cnt_clk)
 RESERVED_NAMES = {
     'oscA_sw', 'oscB_sw', 'osc_ctrl', 'trig_sw', 'out1_sw', 'out2_sw',
     'slow_out1_sw', 'slow_out2_sw', 'slow_out3_sw', 'slow_out4_sw',
@@ -2413,6 +2439,43 @@ def make_logo(svg_in, svg_out, png_out, name, icon_out=None, tool='auto', size=L
     if icon_out:
         shutil.copyfile(png_out, icon_out)
     return used, warnings
+
+
+#%% Remote control tools of the App (c/)
+
+def c_regs_table(f, indent=1):
+    """Lines of the register table of c/dummy.c: { name, index (= address/4), signed, read_only, min, max }"""
+    txt=txt_buff(n=indent)
+    regs=sorted(f, key=lambda x: x.index)
+    for k, r in enumerate(regs):
+        txt.add('{{ {:25s}, {:4d}, {:d}, {:d}, {:>12d}LL, {:>12d}LL }}{:s}  // 0x{:03X}'.format(
+                '"'+r.name+'"', r.index, int(r.signed), int(r.ro), int(r.min), int(r.max),
+                ',' if k < len(regs)-1 else ' ', 4*r.index))
+    return txt.out()
+
+
+def c_regs_txt(f):
+    """c/dummy.txt: the register table as CSV (for scripts)"""
+    lines=['name,index,address,signed,read_only,min,max,nbits']
+    for r in sorted(f, key=lambda x: x.index):
+        lines.append('{},{:d},0x{:03X},{:d},{:d},{:d},{:d},{:d}'.format(r.name, r.index, 4*r.index, int(r.signed),
+                     int(r.ro), int(r.min), int(r.max), r.nbits))
+    return '\n'.join(lines)+'\n'
+
+
+def c_app_regs_h(f, base_size):
+    """c/app_regs.h: base, size and offsets of the dummy registers used by the c/ tools"""
+    lines=['/* Generated by config_tool.py from app.ini: do not edit (it is rewritten by config_tool.py -m). */',
+           '/* Registers of the dummy module (fpga/prj/v0.94/rtl/dummy.v) for the c/ tools of the App. */',
+           '#ifndef APP_REGS_H', '#define APP_REGS_H', '',
+           '#define DUMMY_FPGA_BASE_ADDR  0x40600000',
+           '#define DUMMY_FPGA_BASE_SIZE  0x{:X}'.format(base_size), '',
+           '/* byte offsets from DUMMY_FPGA_BASE_ADDR */']
+    for r in sorted(f, key=lambda x: x.index):
+        lines.append('#define DUMMY_{:<20s} 0x{:03X}'.format(r.name.upper()+'_OFF', 4*r.index))
+    lines += ['', '#endif', '']
+    return '\n'.join(lines)
+
 
 if __name__ == '__main__':
     print('This is a library file, only contains class and function definitios.\n')

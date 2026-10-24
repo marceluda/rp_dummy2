@@ -1,6 +1,6 @@
 # Devel: compiling, testing and uploading
 
-> Documented version: branch `devel2.0`, checkpoint CP4_bis (`8b80464`). Back to the [README](../README.md).
+> Documented version: branch `devel2.0`, checkpoint CP5 (remote control tools, streaming; on top of CP4_bis `8b80464`). Back to the [README](../README.md).
 > Related: [Usage.md](Usage.md) (generate an App, `config_tool.py`), [App.md](App.md) (registers, scope, modules).
 
 Contents:
@@ -20,7 +20,7 @@ Contents:
 |---|---|---|
 | Xilinx **Vivado 2020.1** | FPGA of the App (`fpga/`) and `bootgen` (`.bit` → `fpga.bit.bin`) | `/tools/Xilinx/Vivado/2020.1/settings64.sh` (`VIVADO_SETTINGS`, `dummy/fpga/Makefile:33`) |
 | Xilinx Vivado 2015.2 | only the optional `make eco1` (`fpga_eco1/`) | `/opt/Xilinx/Vivado/2015.2/settings64.sh` (`settings.sh:5`) |
-| Linaro toolchain `arm-linux-gnueabihf` 4.9 | C controller `controllerhf.so` (cross-compiled) | `/opt/linaro/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf/` or `...-2015.02-3-...` (`settings.sh:11-19`) |
+| Linaro toolchain `arm-linux-gnueabihf` 4.9 | C controller `controllerhf.so` and the tools of `c/` (cross-compiled) | `/opt/linaro/gcc-linaro-4.9-2014.11-x86_64_arm-linux-gnueabihf/` or `...-2015.02-3-...` (`settings.sh:11-19`) |
 | Python >= 3.8 | `new_project.py`, `config_tool.py` (standard library only) | |
 | `rsvg-convert` (`librsvg2-bin`), `inkscape` or the Python module `cairosvg` | optional: logo with the App name | |
 | `gcc`, `node`, `python3` | optional: host tests (`tests/`) | |
@@ -47,7 +47,8 @@ Always build with `LANG=C` (Vivado and the scripts expect it; see `CLAUDE.md` of
 ├── _settings.env         RPIP / RPOPTS / RPSCP for make upload (from [general] rp_host, ssh_opts, scp_opts)
 ├── _build_number         BUILD_NUMBER, incremented by make clean_app / clean_fpga (created by them)
 ├── README.md, CHANGELOG.md, LICENSE, .gitignore
-├── resources/            logo.svg / logo.png (App icon), code_helpers/, remote_control/, rp_cmds/
+├── resources/            logo.svg / logo.png (App icon), code_helpers/, remote_control/ (http_regs.py: HTTP client),
+│                         streaming/ (stream_receiver.py: receiver on the PC), rp_cmds/
 ├── archive/              packages made by make (zip, tar.gz)
 └── my_app/               the App
     ├── app.ini           the controls (copy of my.ini): edit it, then ./config_tool.py -a
@@ -55,7 +56,10 @@ Always build with `LANG=C` (Vivado and the scripts expect it; see `CLAUDE.md` of
     ├── index.html, css/, js/          web interface
     ├── info/             info.json (name, version), icon.png
     ├── src/              C controller (main.c, worker.c, fpga*.c, dummy.c, ...) and its Makefile
-    ├── c/                names_dic.txt (texts of the combo values)
+    ├── c/                remote control tools (cross compiled by make app / c_tools): dummy.c (registers of the
+    │                     dummy module by name), osc.c (scope), streaming.c + stream_tcp_osc_cmd.c + stream_start.sh
+    │                     (scope → TCP), regtool.h, app_regs.h, dummy.txt / osc.txt (CSV), names_dic.txt (texts of
+    │                     the combo values), Makefile
     ├── py/               Python scripts for the board (hugo.py: register list, dummy.py, osc*.py, data_dump.py)
     ├── fpga/             FPGA, Vivado 2020.1 (RedPitaya-FPGA structure)
     │   ├── Makefile, red_pitaya_vivado_Z10.tcl, synCheck.sh
@@ -66,16 +70,17 @@ Always build with `LANG=C` (Vivado and the scripts expect it; see `CLAUDE.md` of
     │       └── dummy/                                 library of modules + your modules (+ .dat tables)
     ├── fpga_eco1/        optional FPGA, Vivado 2015.2 (0.9x scope), same dummy.v
     ├── fpga.conf         0.9x/1.0: path of red_pitaya.bit
-    ├── fpga.sh           2.0: loads fpga.bit.bin with fpgautil when the App starts
-    ├── nginx.conf        2.0: no cache for index.html
+    ├── fpga.sh           2.0: stops the streaming tools of the App, loads fpga.bit.bin with fpgautil when the App starts
+    ├── nginx.conf        2.0: no cache for index.html; HTTP endpoints of the c/ tools (/<App>/dummy, osc, streaming, ...)
     ├── upload_app.sh     upload script (copied to target/)
     ├── Makefile          build of the App (below)
     └── doc/              Doxygen configuration of the C sources
 ```
 
 Files written by `config_tool.py` (only between their `DOCK` markers): `dummy.v`, `src/main.c`, `src/main.h`,
-`src/dummy.c`, `src/fpga_dummy.c`, `src/fpga_dummy.h`, `index.html`, `py/hugo.py`, the tcl scripts of `fpga/` and
-`fpga_eco1/`, and `c/names_dic.txt` (whole file). See [Usage.md §5](Usage.md#5-config_toolpy).
+`src/dummy.c`, `src/fpga_dummy.c`, `src/fpga_dummy.h`, `c/dummy.c` (register table of the tool), `index.html`,
+`py/hugo.py`, the tcl scripts of `fpga/` and `fpga_eco1/`, and as whole files `c/app_regs.h`, `c/dummy.txt` (`-m`) and
+`c/names_dic.txt` (`-n`). See [Usage.md §5](Usage.md#5-config_toolpy).
 
 ---
 
@@ -95,12 +100,13 @@ Run them as `make -C my_app <target>` from the project folder, or `make <target>
 
 | Target | Does | Output |
 |---|---|---|
-| `all` | `controllerhf.so` + `fpga` | |
-| `app` | C controller (`make -C src`, `-Wall -Werror`) | `my_app/controllerhf.so` |
+| `all` | `controllerhf.so` + `c_tools` + `fpga` | |
+| `app` | C controller (`make -C src`, `-Wall -Werror`) + `c_tools` | `my_app/controllerhf.so` |
+| `c_tools` | tools of `c/` (`make -C c all`, Linaro) | `my_app/c/dummy`, `osc`, `streaming`, `stream_tcp_osc_cmd` |
 | `fpga` | FPGA with Vivado 2020.1 + `bootgen` (`make -C fpga all`) | `my_app/red_pitaya.bit`, `fpga.bit`, `fpga.bit.bin` (copied from `fpga/prj/v0.94/out/`) |
 | `eco1` | optional: Vivado 2015.2 design of `fpga_eco1/` (needs `settings.sh`) | `my_app/red_pitaya_eco1.bit` |
 | `zip` / `tar` | builds `target/` and packs it (builds what is missing, FPGA included) | `archive/my_app-<ver>-<build>-<rev>.zip` / `.tar.gz` |
-| `clean_app` | C objects, `controllerhf.so`, `target/`; BUILD_NUMBER + 1 | |
+| `clean_app` | C objects, `controllerhf.so`, binaries of `c/`, `target/`; BUILD_NUMBER + 1 | |
 | `clean_fpga` | `make -C fpga clean`, bitstreams, `target/`; BUILD_NUMBER + 1 | |
 | `clean_eco1` | `fpga_eco1/` products and `red_pitaya_eco1.bit` | |
 | `clean_target` | `target/` | |
@@ -112,7 +118,7 @@ The project `Makefile` has `all`, `clean` and `upload`, which call the App Makef
 Version string: `<ver>-<build>-<rev>` with `ver` from `info/info.json` (`0.1.0` for a new App), `build` = `BUILD_NUMBER`
 (`_build_number`, 0 by default) and `rev` = `REVISION` (`devbuild` by default; `make REVISION=$(git rev-parse --short
 HEAD)`). It is written into `target/my_app/info/info.json` and into the `app_version` of `target/my_app/index.html`
-(`dummy/Makefile:90-92`).
+(`dummy/Makefile:95-97`).
 
 ### Contents of the package (`target/`)
 
@@ -120,13 +126,15 @@ HEAD)`). It is written into `target/my_app/info/info.json` and into the `app_ver
 target/
 ├── upload_app.sh, README.md, CHANGELOG.md, resources/
 └── my_app/
-    ├── controllerhf.so, index.html, css/, js/, info/, py/, c/
+    ├── controllerhf.so, index.html, css/, js/, info/, py/
+    ├── c/                                  dummy, osc, streaming, stream_tcp_osc_cmd (binaries), stream_start.sh,
+    │                                       sources, dummy.txt, osc.txt, names_dic.txt
     ├── fpga.sh (755), fpga.bit.bin          Ecosystem 2.0
     ├── fpga.conf, red_pitaya.bit           Ecosystem 0.9x/1.0 (red_pitaya_eco1.bit if make eco1 was run)
-    └── nginx.conf
+    └── nginx.conf                          Ecosystem 2.0 (HTTP endpoints: restart nginx after the first upload)
 ```
 
-(`APP_FILES`, `dummy/Makefile:79-92`.) The 0.9x/1.0 bitstream of the packages is `red_pitaya_eco1.bit` when it exists,
+(`APP_FILES`, `dummy/Makefile:84-97`.) The 0.9x/1.0 bitstream of the packages is `red_pitaya_eco1.bit` when it exists,
 otherwise the 2020.1 `red_pitaya.bit` (`PKG_BIT`, `dummy/Makefile:33`).
 
 ### FPGA (`my_app/fpga/Makefile`)
@@ -152,7 +160,7 @@ and device tree; `project` opens the 2015.2 GUI.
 
 | Build | Time | Result | Source |
 |---|---|---|---|
-| FPGA Vivado 2020.1 (`make fpga`, test App `dummy2_test`) | 21 min 25 s (CP4), 22 min 45 s (CP4_bis) | 0 errors, 54 CRITICAL WARNING of the base design; WNS −0.229 ns (`pll_pwm_clk`, 3 endpoints) and −0.107 ns (`pll_adc_clk`, scope `i_scope/i_cfg`), hold OK (WHS +0.024 ns); 5591 LUT, 18 BRAM | `reportes/dummy2/2026-10-23_cp4_bis.md` |
+| FPGA Vivado 2020.1 (`make`, test App `dummy2_test`) | 21 min 25 s (CP4), 22 min 45 s (CP4_bis), 22 min 28 s (CP5, C + FPGA + packages) | CP5: 0 errors, 54 CRITICAL WARNING of the base design; WNS −0.379 ns (`pll_pwm_clk`, 8 endpoints) and −0.195 ns (`pll_adc_clk`, 12 endpoints: scope configuration `i_scope/i_cfg` and `i_dummy/stream_cmd` → scope decimator, quasi-static registers), hold OK (WHS +0.031 ns); 5600 LUT, 18 BRAM | `reportes/dummy2/2026-10-23_cp5_rebase.md` |
 | FPGA Vivado 2015.2 (`make eco1`) | 5 min 26 s | 0 errors; WNS −0.263 ns, WHS −2.163 ns (base 2015.2 design) | `reportes/dummy2/2026-10-22_cp3_1_cp4.md` |
 | C controller + web package | seconds | 0 gcc warnings (`-Werror`) | idem |
 
@@ -182,7 +190,7 @@ Vivado (`tests/Makefile`).
 
 ```bash
 make -C tests            # everything (about 13 s)
-make -C tests c          # auto_set_harness only
+make -C tests c          # auto_set_harness and test_tools.sh only
 make -C tests js         # web page simulations (skipped if node is not installed)
 make -C tests py         # generator tests
 ```
@@ -190,11 +198,12 @@ make -C tests py         # generator tests
 | Test | Covers |
 |---|---|
 | `auto_set_harness.c` (gcc) | AUTO of `dummy/src/worker.c` with a mock scope: 2.0 sample decoding, trigger level of sawtooth / square / DC, time limits (no hang without trigger), quit during AUTO |
+| `test_tools.sh` (gcc) | `c/dummy` and `c/osc` built for the PC over a sparse file instead of `/dev/mem`: reads, writes, hex, sign, errors (name, read only, range, negative in unsigned), a request with one error writes nothing, `TrgUnlock` 0x094 / `DebLen` 0x090; offsets of `c/app_regs.h` against `dummy_reg_t` (`_Static_assert`) |
 | `plot_wheel_sim.js` (node) | Mouse wheel over the scope: both axes, SHIFT, ALT, cursors, limits (57 checks) |
 | `ext_trig_reset_zoom_sim.js` (node) | Ext Trig → External + Normal; Reset zoom over the 10 time ranges (32 checks) |
-| `generator_test.py` (python3) | Logo with each renderer and fallback, no DEBUG/RELOAD packages, `config_tool.py` (modules → tcl, combo texts from muxers and `[names]`, `names_dic.txt`, `app.ini` changes, `--rename`) (13 tests) |
+| `generator_test.py` (python3) | Logo with each renderer and fallback, no DEBUG/RELOAD packages, `config_tool.py` (modules → tcl, combo texts from muxers and `[names]`, `names_dic.txt`, `app.ini` changes, `--rename`), App name in the paths of `fpga.sh` / `nginx.conf` / `src/main.c` and `c/` without binaries (14 tests) |
 
-Last run (2026-10-23, this checkpoint): auto-set ALL PASS, 57/57, 32/32, 13 tests OK.
+Last run (2026-10-23, this checkpoint): auto-set ALL PASS, `test_tools.sh` ALL PASS, 57/57, 32/32, 14 tests OK.
 
 Other checks used during development (see the reports): `config_tool.py -a` twice on the template must leave it
 unchanged (idempotent); `make app` of a generated App with Linaro; `xvlog` + `xelab` (Vivado 2020.1 simulator) on
@@ -260,7 +269,7 @@ make -C my_app upload_bit                     # only red_pitaya.bit + fpga.bit.b
 make -C my_app upload_html                    # only index.html, css, js
 ```
 
-`upload` rebuilds `target/` if needed, replaces the App folder and sets `fpga.sh` to 755 (`dummy/Makefile:124-151`). It
+`upload` rebuilds `target/` if needed, replaces the App folder and sets `fpga.sh` to 755 (`dummy/Makefile:130-157`). It
 does **not** restart nginx: after the first upload of an App (or a change of its `nginx.conf`) restart it yourself (below)
 or use `upload_app.sh -r`.
 
@@ -302,17 +311,17 @@ Layout of this repository:
 | `new_project.py` | the generator ([Usage.md](Usage.md)) |
 | `config.ini` | example `.ini` with every key (also the default of `-c`) |
 | `dummy/` | the App template. It is itself a complete App (`dummy/app.ini`: no controls, `AppName = dummy`) |
-| `dummy/config_lib.py` | `.ini` parser/validator (shared with `new_project.py`), generators of the docks, logo, tcl, `names_dic.txt` |
+| `dummy/config_lib.py` | `.ini` parser/validator (shared with `new_project.py`), generators of the docks, logo, tcl, `names_dic.txt`, register tables of `c/` |
 | `dummy/config_tool.py` | regenerates the docks of an App |
 | `project_files/` | templates of the project `Makefile`, `README.md`, `CHANGELOG.md`, `.gitignore` (`@APP@`, `@DATE@`) |
-| `resources/` | copied to every project: `logo.svg`/`logo.png`, helpers (`code_helpers/muxer_generator.py`, `gen_sin_cos.py`), old remote-control scripts (`remote_control/`, SSH/paramiko), `rp_cmds/nginx.sh` |
+| `resources/` | copied to every project: `logo.svg`/`logo.png`, helpers (`code_helpers/muxer_generator.py`, `gen_sin_cos.py`), `remote_control/` (`http_regs.py`, HTTP client of `/<App>/dummy` and `/osc`; plus the old SSH/paramiko scripts), `streaming/stream_receiver.py`, `rp_cmds/nginx.sh` |
 | `settings.sh` | environment, copied to every project |
 | `tests/` | host tests |
 | `doc/` | this documentation |
 
 After changing `config_lib.py`, `config_tool.py` or the docks of the template, run `dummy/config_tool.py -a` twice: the
 second run must not change anything (`git status` clean), then `make -C tests`. Do not commit build products of the
-template (`.gitignore` covers `dummy/target/`, `dummy/src/obj/`, bitstreams, Vivado folders).
+template (`.gitignore` covers `dummy/target/`, `dummy/src/obj/`, the binaries of `dummy/c/`, bitstreams, Vivado folders).
 
 Development history and test reports of the Ecosystem 2.0 version: `reportes/dummy2.md` and `reportes/dummy2/` in the
 parent Apps folder (not part of this repository).

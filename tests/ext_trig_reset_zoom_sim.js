@@ -183,7 +183,7 @@ function makeEnv(init, ls) {
   code += ['unsentChanges', 'loadParams', 'updateTimeUnits', 'isParamChanged', 'splitParams', 'postParamsChunks',
            'sendParams', 'postEnd', 'sendableValue', 'isSendable', 'hasRealChange', 'doGetData', 'runStop', 'singleUpdate',
            'onDropdownChange', 'config_storage_read', 'config_load_storage', 'resetZoom', 'resetZoomY', 'scopeSetXWindow',
-           'timeUnitFactor'].map(fnSrc).join('\n');
+           'timeUnitFactor', 'roundLevel'].map(fnSrc).join('\n');
   code += '\n' + blockSrc('RESET ZOOM') + '\n';
   code += '\nvar scope_stop = false;\nfunction updateGraphData() { if(downloading || scope_stop) return; if(update_timer) { clearTimeout(update_timer); update_timer = null; }' +
           ' downloading = true; doGetData(); }\n';

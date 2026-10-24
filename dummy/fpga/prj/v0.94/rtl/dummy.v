@@ -29,7 +29,7 @@ module dummy(
     output wire              trigger,            // Oscilloscope trigger output
     output wire              digital_modulation, // Modulation for digital otuput
     output reg      [24-1:0] pwm_cfg_a,pwm_cfg_b,pwm_cfg_c,pwm_cfg_d,
-    output reg      [32-1:0] osc_ctrl,
+    output wire     [32-1:0] osc_ctrl_w,         // scope control: [19:3] decimation, [2] override, [1:0] filter bypass
 
     // system bus
     input  wire     [32-1:0] sys_addr        ,  //!< bus address
@@ -57,8 +57,13 @@ module dummy(
     reg         [ 4-1:0] out1_sw,out2_sw,slow_out1_sw,slow_out2_sw,slow_out3_sw,slow_out4_sw;
 
     // scope --------------------------
+    reg         [ 2-1:0] osc_ctrl;
     reg         [ 5-1:0] oscA_sw,oscB_sw;
     reg         [ 8-1:0] trig_sw;
+
+    // streaming --------------------------
+    reg         [17-1:0] stream_rate;
+    reg         [32-1:0] stream_ip,stream_port,stream_cmd;
 
     // [WIREREG DOCK END]
 
@@ -459,6 +464,44 @@ module dummy(
     // -----------------------------------------------------------------------------------------
 
 
+    // [BUS READ COPIES DOCK]
+    // Registered copies of the read-only signals (wires). The bus reads them instead of the wires, so every
+    // input of the read mux of sys_rdata is a register of this clock domain (no long combinational path of
+    // the design ends in sys_rdata). They are held while a read is requested (sys_ren: 2 clocks with the
+    // address stable in the 2.0 bus; multicycle constraint in prj/v0.94/sdc/red_pitaya.xdc).
+    reg  signed [14-1:0] in1_rd;
+    reg  signed [14-1:0] in2_rd;
+    reg  signed [14-1:0] out1_rd;
+    reg  signed [14-1:0] out2_rd;
+    reg         [12-1:0] slow_out1_rd;
+    reg         [12-1:0] slow_out2_rd;
+    reg         [12-1:0] slow_out3_rd;
+    reg         [12-1:0] slow_out4_rd;
+    reg  signed [14-1:0] oscA_rd;
+    reg  signed [14-1:0] oscB_rd;
+    always @(posedge clk) if (!sys_ren) begin
+        in1_rd               <= in1;
+        in2_rd               <= in2;
+        out1_rd              <= out1;
+        out2_rd              <= out2;
+        slow_out1_rd         <= slow_out1;
+        slow_out2_rd         <= slow_out2;
+        slow_out3_rd         <= slow_out3;
+        slow_out4_rd         <= slow_out4;
+        oscA_rd              <= oscA;
+        oscB_rd              <= oscB;
+    end
+    // [BUS READ COPIES DOCK END]
+
+
+    // -----------------------------------------------------------------------------------------
+    // Scope control: bits 0/1 bypass the equalization filters of the scope (osc_ctrl, from the web
+    // page); bit 2 = 1 while streaming (stream_cmd[0]) replaces the decimation of the scope with
+    // stream_rate (bits 19:3). Only the 2.0 scope (fpga/) uses bits 2..19 (from rp_lock-in_pid_h).
+    // -----------------------------------------------------------------------------------------
+    assign osc_ctrl_w = { 12'b0, stream_rate, stream_cmd[0], osc_ctrl } ;
+
+
     // [FPGA MEMORY DOCK]
     //---------------------------------------------------------------------------------
     //
@@ -479,6 +522,10 @@ module dummy(
         slow_out3_sw           <=   4'd0     ; // switch for muxer slow_out3
         slow_out4_sw           <=   4'd0     ; // switch for muxer slow_out4
         read_ctrl              <=   3'd0     ; // [unused,start_clk,Freeze]
+        stream_ip              <=  32'd0     ; // Client IP for streaming (a.b.c.d = a + b<<8 + c<<16 + d<<24)
+        stream_port            <=  32'd6000  ; // Client TCP port for streaming
+        stream_rate            <=  17'd128   ; // Decimation of the scope while streaming
+        stream_cmd             <=  32'd0     ; // Streaming command (!= 0: streaming on)
     end else begin
         if (sys_wen) begin
             if (sys_addr[19:0]==20'h00000)  oscA_sw               <=  sys_wdata[ 5-1: 0] ; // switch for muxer oscA
@@ -502,10 +549,17 @@ module dummy(
           //if (sys_addr[19:0]==20'h00048)  oscA                  <=  sys_wdata[14-1: 0] ; // signal for Oscilloscope Channel A
           //if (sys_addr[19:0]==20'h0004C)  oscB                  <=  sys_wdata[14-1: 0] ; // signal for Oscilloscope Channel B
             if (sys_addr[19:0]==20'h00050)  read_ctrl             <=  sys_wdata[ 3-1: 0] ; // [unused,start_clk,Freeze]
+            if (sys_addr[19:0]==20'h00054)  stream_ip             <=  sys_wdata[32-1: 0] ; // Client IP for streaming (a.b.c.d = a + b<<8 + c<<16 + d<<24)
+            if (sys_addr[19:0]==20'h00058)  stream_port           <=  sys_wdata[32-1: 0] ; // Client TCP port for streaming
+            if (sys_addr[19:0]==20'h0005C)  stream_rate           <=  sys_wdata[17-1: 0] ; // Decimation of the scope while streaming
+            if (sys_addr[19:0]==20'h00060)  stream_cmd            <=  sys_wdata[32-1: 0] ; // Streaming command (!= 0: streaming on)
         end
     end
     //---------------------------------------------------------------------------------
     // FPGA --> MEMORIA --> SO
+    // sys_rdata only changes while a read is requested (sys_ren) and then holds its value. The PS side
+    // of the bus (sys_bus_cdc, clock fclk[0]) samples sys_rdata some cycles after sys_ack, asynchronously
+    // to clk (adc_clk): a sys_rdata reloaded every cycle with a changing signal could give a mix of bits.
     wire sys_en;
     assign sys_en = sys_wen | sys_ren;
 
@@ -515,31 +569,38 @@ module dummy(
         sys_ack <= 1'b0  ;
     end else begin
         sys_err <= 1'b0 ;
+        sys_ack <= sys_en;
 
-        casez (sys_addr[19:0])
-            20'h00000 : begin sys_ack <= sys_en;  sys_rdata <= {  27'b0                   ,          oscA_sw  }; end // switch for muxer oscA
-            20'h00004 : begin sys_ack <= sys_en;  sys_rdata <= {  27'b0                   ,          oscB_sw  }; end // switch for muxer oscB
-            20'h00008 : begin sys_ack <= sys_en;  sys_rdata <= {  30'b0                   ,         osc_ctrl  }; end // oscilloscope control // [osc2_filt_off,osc1_filt_off]
-            20'h0000C : begin sys_ack <= sys_en;  sys_rdata <= {  24'b0                   ,          trig_sw  }; end // Select the external trigger signal
-            20'h00010 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,          out1_sw  }; end // switch for muxer out1
-            20'h00014 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,          out2_sw  }; end // switch for muxer out2
-            20'h00018 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,     slow_out1_sw  }; end // switch for muxer slow_out1
-            20'h0001C : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,     slow_out2_sw  }; end // switch for muxer slow_out2
-            20'h00020 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,     slow_out3_sw  }; end // switch for muxer slow_out3
-            20'h00024 : begin sys_ack <= sys_en;  sys_rdata <= {  28'b0                   ,     slow_out4_sw  }; end // switch for muxer slow_out4
-            20'h00028 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{in1[13]}}           ,              in1  }; end // Input signal IN1
-            20'h0002C : begin sys_ack <= sys_en;  sys_rdata <= {  {18{in2[13]}}           ,              in2  }; end // Input signal IN2
-            20'h00030 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{out1[13]}}          ,             out1  }; end // signal for RP RF DAC Out1
-            20'h00034 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{out2[13]}}          ,             out2  }; end // signal for RP RF DAC Out2
-            20'h00038 : begin sys_ack <= sys_en;  sys_rdata <= {  20'b0                   ,        slow_out1  }; end // signal for RP slow DAC 1
-            20'h0003C : begin sys_ack <= sys_en;  sys_rdata <= {  20'b0                   ,        slow_out2  }; end // signal for RP slow DAC 2
-            20'h00040 : begin sys_ack <= sys_en;  sys_rdata <= {  20'b0                   ,        slow_out3  }; end // signal for RP slow DAC 3
-            20'h00044 : begin sys_ack <= sys_en;  sys_rdata <= {  20'b0                   ,        slow_out4  }; end // signal for RP slow DAC 4
-            20'h00048 : begin sys_ack <= sys_en;  sys_rdata <= {  {18{oscA[13]}}          ,             oscA  }; end // signal for Oscilloscope Channel A
-            20'h0004C : begin sys_ack <= sys_en;  sys_rdata <= {  {18{oscB[13]}}          ,             oscB  }; end // signal for Oscilloscope Channel B
-            20'h00050 : begin sys_ack <= sys_en;  sys_rdata <= {  29'b0                   ,        read_ctrl  }; end // [unused,start_clk,Freeze]
-            default   : begin sys_ack <= sys_en;  sys_rdata <=  32'h0        ; end
-        endcase
+        if (sys_ren) begin
+            casez (sys_addr[19:0])
+                20'h00000 : sys_rdata <= {  27'b0                   ,          oscA_sw  }; // switch for muxer oscA
+                20'h00004 : sys_rdata <= {  27'b0                   ,          oscB_sw  }; // switch for muxer oscB
+                20'h00008 : sys_rdata <= {  30'b0                   ,         osc_ctrl  }; // oscilloscope control // [osc2_filt_off,osc1_filt_off]
+                20'h0000C : sys_rdata <= {  24'b0                   ,          trig_sw  }; // Select the external trigger signal
+                20'h00010 : sys_rdata <= {  28'b0                   ,          out1_sw  }; // switch for muxer out1
+                20'h00014 : sys_rdata <= {  28'b0                   ,          out2_sw  }; // switch for muxer out2
+                20'h00018 : sys_rdata <= {  28'b0                   ,     slow_out1_sw  }; // switch for muxer slow_out1
+                20'h0001C : sys_rdata <= {  28'b0                   ,     slow_out2_sw  }; // switch for muxer slow_out2
+                20'h00020 : sys_rdata <= {  28'b0                   ,     slow_out3_sw  }; // switch for muxer slow_out3
+                20'h00024 : sys_rdata <= {  28'b0                   ,     slow_out4_sw  }; // switch for muxer slow_out4
+                20'h00028 : sys_rdata <= {  {18{in1_rd[13]}}        ,           in1_rd  }; // Input signal IN1
+                20'h0002C : sys_rdata <= {  {18{in2_rd[13]}}        ,           in2_rd  }; // Input signal IN2
+                20'h00030 : sys_rdata <= {  {18{out1_rd[13]}}       ,          out1_rd  }; // signal for RP RF DAC Out1
+                20'h00034 : sys_rdata <= {  {18{out2_rd[13]}}       ,          out2_rd  }; // signal for RP RF DAC Out2
+                20'h00038 : sys_rdata <= {  20'b0                   ,     slow_out1_rd  }; // signal for RP slow DAC 1
+                20'h0003C : sys_rdata <= {  20'b0                   ,     slow_out2_rd  }; // signal for RP slow DAC 2
+                20'h00040 : sys_rdata <= {  20'b0                   ,     slow_out3_rd  }; // signal for RP slow DAC 3
+                20'h00044 : sys_rdata <= {  20'b0                   ,     slow_out4_rd  }; // signal for RP slow DAC 4
+                20'h00048 : sys_rdata <= {  {18{oscA_rd[13]}}       ,          oscA_rd  }; // signal for Oscilloscope Channel A
+                20'h0004C : sys_rdata <= {  {18{oscB_rd[13]}}       ,          oscB_rd  }; // signal for Oscilloscope Channel B
+                20'h00050 : sys_rdata <= {  29'b0                   ,        read_ctrl  }; // [unused,start_clk,Freeze]
+                20'h00054 : sys_rdata <=                                     stream_ip   ; // Client IP for streaming (a.b.c.d = a + b<<8 + c<<16 + d<<24)
+                20'h00058 : sys_rdata <=                                   stream_port   ; // Client TCP port for streaming
+                20'h0005C : sys_rdata <= {  15'b0                   ,      stream_rate  }; // Decimation of the scope while streaming
+                20'h00060 : sys_rdata <=                                    stream_cmd   ; // Streaming command (!= 0: streaming on)
+                default   : sys_rdata <=  32'h0        ;
+            endcase
+        end
     end
     // [FPGA MEMORY DOCK END]
 

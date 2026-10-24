@@ -1,7 +1,7 @@
 # Host-side regression tests of the template (no Red Pitaya, no cross compiler, no Vivado).
 #
 #   make          build and run every test
-#   make c        auto_set_harness only
+#   make c        auto_set_harness and test_tools.sh only
 #   make js       web page simulations (node)
 #   make py       generator tests (python3)
 #   make clean
@@ -11,7 +11,10 @@
 # plot_wheel_sim.js: mouse wheel over the scope (no key both axes, SHIFT time only, ALT Y only, cursors, limits).
 # ext_trig_reset_zoom_sim.js: Ext Trig sets Source External + Mode Normal; Reset zoom (one memory at the current Dec).
 # generator_test.py: logo (cairosvg / rsvg-convert / inkscape / fallback), no DEBUG/RELOAD, config_tool.py
-# (modules -> tcl, combo texts from muxers and [names], c/names_dic.txt, app.ini changes, --rename).
+# (modules -> tcl, combo texts from muxers and [names], c/names_dic.txt, app.ini changes, --rename),
+# App name in the paths of fpga.sh / nginx.conf / src/main.c, c/ without binaries.
+# test_tools.sh: c/dummy and c/osc built for the PC on a sparse file instead of /dev/mem (reads, writes,
+# errors, ranges), and the offsets of app_regs.h against the register struct of the controller.
 
 SRC     = ../dummy/src
 CC      = gcc
@@ -31,6 +34,7 @@ run: c js py
 
 c: auto_set_harness
 	$(TIMEOUT) ./auto_set_harness
+	$(TIMEOUT) ./test_tools.sh
 
 JS_SIMS = plot_wheel_sim.js ext_trig_reset_zoom_sim.js
 

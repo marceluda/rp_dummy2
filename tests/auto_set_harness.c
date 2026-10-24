@@ -73,6 +73,11 @@ int osc_fpga_triggered(void)
     return (lvl > m_min[ch]) && (lvl < m_max[ch]);  /* the signal crosses the level */
 }
 
+/* ---- dummy module (no streaming in these tests) ---- */
+#include "fpga_dummy.h"
+dummy_reg_t *g_dummy_reg = NULL;
+int stream_tcp_alive(void) { return 0; }
+
 /* ---- stubs of main.c ---- */
 static int n_update = 0, n_aborted = 0, n_failed = 0;
 static rp_app_params_t last_params[PARAMS_NUM+1];

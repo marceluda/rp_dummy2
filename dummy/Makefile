@@ -39,16 +39,21 @@ export CFLAGS
 
 # fpga/app are PHONY: with fpga.sh present, make's implicit rule '%: %.sh' would
 # otherwise turn the target 'fpga' (a directory) into 'cat fpga.sh > fpga'
-.PHONY: clean clean_fpga clean_app clean_target app fpga eco1 clean_eco1 zip tar
+.PHONY: clean clean_fpga clean_app clean_target app c_tools fpga eco1 clean_eco1 zip tar
 
-all: $(CONTROLLERHF) fpga
+all: $(CONTROLLERHF) c_tools fpga
+
+# Remote control tools of c/ (dummy, osc, streaming, stream_tcp_osc_cmd): cross compiled with the flags of
+# c/Makefile, so the binaries in the packages always match their sources
+c_tools:
+	$(MAKE) -C c all
 
 # The C controller (src/). For the TRACE() messages on the nginx log, uncomment "#define DEBUG 1" in
 # src/main.h and rebuild it (make clean_app ; make app).
 $(CONTROLLERHF):
 	$(MAKE) -C src ../$(CONTROLLERHF)
 
-app: $(CONTROLLERHF)
+app: $(CONTROLLERHF) c_tools
 
 fpga: red_pitaya.bit fpga.bit $(FPGA_BIN)
 
@@ -78,7 +83,7 @@ clean_eco1:
 # Files of the App on the board
 APP_FILES = fpga.conf info py css js c index.html nginx.conf
 
-target/$(APP): red_pitaya.bit $(FPGA_BIN) $(CONTROLLERHF) index.html
+target/$(APP): red_pitaya.bit $(FPGA_BIN) $(CONTROLLERHF) c_tools index.html
 	mkdir -p target/$(APP)
 	cp -r $(CONTROLLERHF) $(APP_FILES) fpga.sh $(FPGA_BIN) target/$(APP)
 	cp $(PKG_BIT) target/$(APP)/red_pitaya.bit   # Ecosystem 0.9x/1.0 (fpga.conf)
@@ -106,6 +111,7 @@ clean_target:
 
 clean_app:
 	$(MAKE) -C src clean
+	$(MAKE) -C c clean
 	-$(RM) target -rf
 	-$(RM) *.so
 	echo "BUILD_NUMBER=$$(( $(BUILD_NUMBER) + 1 ))" > ../_build_number

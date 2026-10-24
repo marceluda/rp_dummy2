@@ -33,6 +33,31 @@ bootgen, `fpga.bit.bin` (Ecosystem 2.0, loaded by `fpga.sh`). For Ecosystem 0.9x
 - Logo: `resources/logo.svg` with the App name, rendered to `resources/logo.png` and `@APP@/info/icon.png`
   (`@APP@/config_tool.py -l` renders it again; needs `cairosvg`, `rsvg-convert` or `inkscape`).
 
+## Remote control (ssh and HTTP)
+
+The App carries command line tools in `<App>/c/` (cross compiled with the App) and HTTP endpoints for them in its
+`nginx.conf` (Ecosystem 2.0; restart nginx after the first upload: `upload_app.sh -r`):
+
+| On the board (ssh) | HTTP | What |
+|---|---|---|
+| `c/dummy` | `/<App>/dummy` | every register of the dummy module (`name:value` lines) |
+| `c/dummy numberA 1234 comboA` | `/<App>/dummy?numberA=1234&comboA` | write `numberA`, read `comboA` |
+| `c/osc Dec TrgSrc` | `/<App>/osc?Dec&TrgSrc` | registers of the oscilloscope (2.0: `TrgUnlock` at 0x94, `DebLen` at 0x90) |
+| `c/stream_start.sh` | `/<App>/streaming` | start `c/streaming`, which waits for `stream_cmd` != 0 |
+| | `/<App>/check_streaming` | 0: `c/streaming` running, 1: not running |
+| | `/<App>/get_ip`, `/<App>/calib` | address of the client, calibration of the board |
+
+The register table of `c/dummy` (and `c/dummy.txt`, CSV) is generated from `app.ini` by `config_tool.py -m`. Values
+are decimal or `0x...`; names, read-only registers and ranges are checked and nothing is written if any argument is
+wrong (`ERROR: ...`, HTTP 400). The HTTP endpoints pass only register names and decimal integers to the tools.
+
+**Streaming of the scope** (2.0 FPGA): `stream_ip` (a.b.c.d as `a + b*256 + c*65536 + d*16777216`), `stream_port`,
+`stream_rate` (decimation) and `stream_cmd` are registers of the dummy module at 0x054–0x060, not parameters of the
+web page. Start a receiver on the PC (`resources/streaming/stream_receiver.py -p 6000`), then
+`/<App>/dummy?stream_ip=...&stream_port=6000&stream_rate=128`, `/<App>/streaming`, `/<App>/dummy?stream_cmd=1`;
+stop with `stream_cmd=0` (also done when the App stops). While streaming, the web page scope does not refresh (the
+scope belongs to `c/stream_tcp_osc_cmd`). `resources/remote_control/http_regs.py` is an HTTP client example.
+
 ## Upload
 
 **Ecosystem 2.0 and `nginx.conf`:** nginx reads the `nginx.conf` of the Apps only when it starts. After the

@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <signal.h>
+#include <dirent.h>
 #include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
@@ -30,6 +32,7 @@
 #include "generate.h"
 #include "pid.h"
 #include "dummy.h"
+#include "fpga_dummy.h"
 
 
 /* Describe app. parameters with some info/limitations */
@@ -323,10 +326,10 @@ static rp_app_params_t rp_main_params[PARAMS_NUM+1] = {
     { "dummy_in2"                     ,      0, 0, 1,        -8192,         8191 }, /** Input signal IN2 **/
     { "dummy_out1"                    ,      0, 0, 1,        -8192,         8191 }, /** signal for RP RF DAC Out1 **/
     { "dummy_out2"                    ,      0, 0, 1,        -8192,         8191 }, /** signal for RP RF DAC Out2 **/
-    { "dummy_slow_out1"               ,      0, 0, 1,        -2048,         2047 }, /** signal for RP slow DAC 1 **/
-    { "dummy_slow_out2"               ,      0, 0, 1,        -2048,         2047 }, /** signal for RP slow DAC 2 **/
-    { "dummy_slow_out3"               ,      0, 0, 1,        -2048,         2047 }, /** signal for RP slow DAC 3 **/
-    { "dummy_slow_out4"               ,      0, 0, 1,        -2048,         2047 }, /** signal for RP slow DAC 4 **/
+    { "dummy_slow_out1"               ,      0, 0, 1,            0,         4095 }, /** signal for RP slow DAC 1 **/
+    { "dummy_slow_out2"               ,      0, 0, 1,            0,         4095 }, /** signal for RP slow DAC 2 **/
+    { "dummy_slow_out3"               ,      0, 0, 1,            0,         4095 }, /** signal for RP slow DAC 3 **/
+    { "dummy_slow_out4"               ,      0, 0, 1,            0,         4095 }, /** signal for RP slow DAC 4 **/
     { "dummy_oscA"                    ,      0, 0, 1,        -8192,         8191 }, /** signal for Oscilloscope Channel A **/
     { "dummy_oscB"                    ,      0, 0, 1,        -8192,         8191 }, /** signal for Oscilloscope Channel B **/
     { "dummy_read_ctrl"               ,      0, 1, 0,            0,            7 }, /** [unused,start_clk,Freeze] **/
@@ -416,9 +419,88 @@ int rp_app_init(void)
     return 0;
 }
 
+/*----------------------------------------------------------------------------------*/
+/* Streaming processes of this App (c/streaming, c/stream_tcp_osc_cmd), from rp_lock-in_pid_h v2.3.10. They read
+ * the PL through /dev/mem: they must not run when Ecosystem 2.0 loads the FPGA of another App.
+ * new_project.py writes the App name in APP_DIR. */
+#define APP_DIR "/opt/redpitaya/www/apps/dummy"
+
+/* Send sig to every c/streaming (from first = 0) and c/stream_tcp_osc_cmd of this App.
+ * Returns how many were found alive (zombies are not counted). */
+static int stream_procs_scan(int sig, unsigned first)
+{
+    static const char *tools[] = { "streaming", "stream_tcp_osc_cmd" };
+    char names[2][128], path[64], exe[512];
+    int  found = 0;
+    unsigned i;
+    DIR *d;
+    struct dirent *e;
+    for(i = 0; i < 2; i++)
+        snprintf(names[i], sizeof(names[i]), "%s/c/%s", APP_DIR, tools[i]);
+    d = opendir("/proc");
+    if(!d)
+        return 0;
+    while((e = readdir(d)) != NULL) {
+        char *end;
+        long pid = strtol(e->d_name, &end, 10);
+        ssize_t n;
+        if(*end != '\0' || pid <= 1 || pid == (long)getpid())
+            continue;
+        snprintf(path, sizeof(path), "/proc/%ld/exe", pid);
+        n = readlink(path, exe, sizeof(exe) - 1);   /* fails for zombies */
+        if(n <= 0)
+            continue;
+        exe[n] = '\0';
+        for(i = first; i < 2; i++) {
+            size_t ln = strlen(names[i]);
+            /* exact path (optionally followed by " (deleted)") */
+            if(strncmp(exe, names[i], ln) == 0 && (exe[ln] == '\0' || exe[ln] == ' ')) {
+                kill((pid_t)pid, sig);
+                found++;
+                break;
+            }
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+/* Used by the worker: after stream_cmd goes to 0 it waits for c/stream_tcp_osc_cmd to end before touching
+ * the scope again */
+int stream_tcp_alive(void)
+{
+    return stream_procs_scan(0, 1);
+}
+
+/* Stop the streaming before leaving the App */
+static void stream_stop_all(void)
+{
+    int i, n;
+    if(g_dummy_reg)
+        *(volatile uint32_t *)&g_dummy_reg->stream_cmd = 0;   /* c/streaming stops its child too */
+
+    n = stream_procs_scan(SIGTERM, 0);
+    if(n == 0)
+        return;
+    fprintf(stderr, "rp_app_exit: stopping %d streaming process(es)\n", n);
+    /* up to 0.5 s for a clean exit, then SIGKILL and up to 0.5 s more */
+    for(i = 0; i < 50 && stream_procs_scan(0, 0) > 0; i++)
+        usleep(10000);
+    if(stream_procs_scan(SIGKILL, 0) > 0) {
+        for(i = 0; i < 50 && stream_procs_scan(0, 0) > 0; i++)
+            usleep(10000);
+        n = stream_procs_scan(0, 0);
+        if(n > 0)
+            fprintf(stderr, "rp_app_exit: %d streaming process(es) still alive\n", n);
+    }
+}
+
 int rp_app_exit(void)
 {
     fprintf(stderr, "Unloading scope (with dummy extensions) version %s-%s.\n", VERSION_STR, REVISION_STR);
+
+    TRACE("LOLO(rp_app_exit): Now: stream_stop_all\n");
+    stream_stop_all();
 
     TRACE("LOLO(rp_app_exit): Now: rp_osc_worker_exit\n");
     rp_osc_worker_exit();

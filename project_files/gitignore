@@ -4,6 +4,10 @@ _build_number
 archive/
 @APP@/target/
 @APP@/src/obj/
+@APP@/c/dummy
+@APP@/c/osc
+@APP@/c/streaming
+@APP@/c/stream_tcp_osc_cmd
 @APP@/fpga_eco1/out/
 @APP@/fpga_eco1/sdk/
 @APP@/fpga_eco1/project/

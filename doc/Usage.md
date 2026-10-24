@@ -1,6 +1,6 @@
 # Usage: create your own Red Pitaya App
 
-> Documented version: branch `devel2.0`, checkpoint CP4_bis (`8b80464`). Back to the [README](../README.md).
+> Documented version: branch `devel2.0`, checkpoint CP5 (on top of CP4_bis `8b80464`). Back to the [README](../README.md).
 > Related: [App.md](App.md) (what a generated App contains, registers, scope, Verilog modules),
 > [Devel.md](Devel.md) (build and upload), [Remote.md](Remote.md).
 
@@ -44,14 +44,14 @@ Python >= 3.8, standard library only (`new_project.py:25-26`). Run it from the r
                  [--icon-tool {auto,cairosvg,rsvg-convert,inkscape}] [-v] [NAME]
 ```
 
-| Option | Default | Meaning (source: `new_project.py:275-299`) |
+| Option | Default | Meaning (source: `new_project.py:295-319`) |
 |---|---|---|
-| `NAME` | `[general] AppName` of the `.ini` | Name of the App: folder and URL (`http://rp-XXXXXX.local/NAME/`). Letters, digits, `_`, `+`, `-`, starting with a letter (`config_lib.py:1502`) |
-| `-c INI`, `--config INI` | `config.ini` | `.ini` with the controls. If the default `config.ini` is not in the current folder, the one next to the script is used (`new_project.py:302-306`) |
+| `NAME` | `[general] AppName` of the `.ini` | Name of the App: folder and URL (`http://rp-XXXXXX.local/NAME/`). Letters, digits, `_`, `+`, `-`, starting with a letter (`config_lib.py:1528`) |
+| `-c INI`, `--config INI` | `config.ini` | `.ini` with the controls. If the default `config.ini` is not in the current folder, the one next to the script is used (`new_project.py:322-326`) |
 | `-o DIR`, `--output DIR` | `.` | Folder where the project folder is created. It must exist |
 | `-p PROJECT`, `--project PROJECT` | `rp_NAME` | Name of the project folder (same character rules as `NAME`) |
 | `-n`, `--dry-run` | | Only check the `.ini` and print the register map; writes nothing |
-| `-f`, `--force` | | Replace the project folder if it exists, **only** if it is empty or looks like a project made by this script (a subfolder with `app.ini` + `config_tool.py`, `new_project.py:246-250`) |
+| `-f`, `--force` | | Replace the project folder if it exists, **only** if it is empty or looks like a project made by this script (a subfolder with `app.ini` + `config_tool.py`, `new_project.py:266-270`) |
 | `-u`, `--settings-only` | | Only (re)write `_settings.env` of an existing project from `[general] rp_host`, `ssh_opts`, `scp_opts` |
 | `--no-icon` | | Do not render the logo: the App uses the generic `resources/logo.png` (the name is still written in `resources/logo.svg`) |
 | `--icon-tool` | `auto` | Tool that renders `resources/logo.svg`: `auto` = the first available of `cairosvg` (Python module), `rsvg-convert` (`librsvg2-bin`), `inkscape` |
@@ -69,7 +69,7 @@ Python >= 3.8, standard library only (`new_project.py:25-26`). Run it from the r
 ### What it creates
 
 The generation is atomic: everything is built in `<DIR>/.<PROJECT>.tmp/` and renamed at the end; on any error the
-temporary folder is removed (`new_project.py:142-243`). The six steps it prints:
+temporary folder is removed (`new_project.py:157-263`). The six steps it prints:
 
 ```
 [1/6] Copying the template .../rp_dummy2/dummy -> my_app/
@@ -81,17 +81,19 @@ temporary folder is removed (`new_project.py:142-243`). The six steps it prints:
 [6/6] Registers -> dummy.v, C controller, web page, py/hugo.py, tcl: my_app/config_tool.py -a
 ```
 
-1. Copies `dummy/` without build products (`.so`, `obj/`, bitstreams, Vivado folders; `new_project.py:51-56`).
+1. Copies `dummy/` without build products (`.so`, `obj/`, bitstreams, Vivado folders, binaries of `c/`;
+   `new_project.py:51-67`).
 2. Fills the templates of `project_files/` (`Makefile`, `README.md`, `CHANGELOG.md`, `.gitignore` with the App name and
    date) and copies `settings.sh`, `LICENSE`, `resources/`; writes `_settings.env`.
 3. Writes the App name in: `app.ini` (copy of your `.ini`, comments included, with `AppName` set), `index.html`
-   (`app_id`, the key of the saved configurations, page title), `info/info.json`, `fpga.conf`, `fpga.sh`, `nginx.conf`
-   and `upload_app.sh`.
+   (`app_id`, the key of the saved configurations, page title), `info/info.json`, `fpga.conf`, `fpga.sh` and
+   `nginx.conf` (paths of the bitstream and of the `c/` tools, locations of the endpoints), `src/main.c` (`APP_DIR`:
+   the controller stops the streaming tools of the App when it exits) and `upload_app.sh`.
 4. Includes or removes the PID block of Red Pitaya (`include_pids`) in the FPGA top, the C controller and the web page;
    the signal generator is always removed in this version (see [`include_genfun`](#general)).
 5. Logo: see [step 4.6](#46-logo).
-6. Runs `<App>/config_tool.py -a`: registers in `dummy.v`, C controller, web page, `py/hugo.py`, tcl scripts and
-   `c/names_dic.txt`.
+6. Runs `<App>/config_tool.py -a`: registers in `dummy.v`, C controller, register tables of the `c/` tools, web page,
+   `py/hugo.py`, tcl scripts and `c/names_dic.txt`.
 
 The resulting layout is described in [Devel.md](Devel.md#layout-of-a-generated-project).
 
@@ -103,7 +105,7 @@ Check an `.ini` and see the register map (`config.ini` of this repository):
 $ ./new_project.py -n
 Reading .../rp_dummy2/config.ini
 App "my_app": 12 controls (2 combo, 2 number, 2 checkbox, 2 button, 4 monitor); signal generator: no, PIDs: no
-Register map (fixed): template registers at 0x000-0x0FC (read_ctrl 0x050), controls from 0x100
+Register map (fixed): template registers at 0x000-0x0FC (read_ctrl 0x050, streaming stream_ip/port/rate/cmd 0x054-0x060), controls from 0x100
   address      offset  register         type      bits  range                      label
   0x40600100   0x100   comboA           combo        4  0 .. 15                    Combo A
   0x40600104   0x104   comboB           combo        2  0 .. 3                     Combo B
@@ -137,9 +139,9 @@ Create the project, then update the board address later:
 ## 2. The `.ini` file
 
 Standard INI syntax (Python `configparser`): comments with `#` or `;` at the start of the line (inline comments are not
-allowed: they would become part of the value, `config_lib.py:1570`). Keys are case-insensitive; **section names are
+allowed: they would become part of the value, `config_lib.py:1596`). Keys are case-insensitive; **section names are
 case-sensitive** (they are the register names). `config.ini` of this repository is a commented example with every key;
-the reference is `config_lib.py:1422-1450` (format) and `load_app_ini()` (`config_lib.py:1563-1734`, validation).
+the reference is `config_lib.py:1448-1476` (format) and `load_app_ini()` (`config_lib.py:1589-1760`, validation).
 
 ### `[general]`
 
@@ -147,8 +149,8 @@ the reference is `config_lib.py:1422-1450` (format) and `load_app_ini()` (`confi
 |---|---|---|---|
 | `AppName` | letters, digits, `_ + -`, starting with a letter | (required unless `NAME` is given) | Name of the App. The `NAME` argument replaces it |
 | `include_pids` | `True/False` (also `1/0`, `yes/no`, `on/off`) | `False` | Include the 2 PID controllers of Red Pitaya (bus `0x40300000`; their outputs are added to OUT1/OUT2, `red_pitaya_top.sv:471-472`) and their panel in the web page. Without them the bus slot answers 0 (`sys_bus_stub_ok`, `red_pitaya_top.sv:723-727`) |
-| `include_genfun` | `True/False` | `False` | Signal generator (ASG) of Red Pitaya. **Not available in this version**: `True` gives a warning and it is not included (the 2020.1 FPGA has no ASG, `config_lib.py:1594-1601`) |
-| `register_map` | `fixed` / `legacy` | `fixed` | `fixed`: template registers at `0x000-0x0FC`, controls from `0x100` in the order of the file. `legacy`: controls right after the template registers (from `0x050`) and `read_ctrl` after them (layout of the old rp_dummy). See [App.md](App.md#register-map-of-the-dummy-module) |
+| `include_genfun` | `True/False` | `False` | Signal generator (ASG) of Red Pitaya. **Not available in this version**: `True` gives a warning and it is not included (the 2020.1 FPGA has no ASG, `config_lib.py:1620-1627`) |
+| `register_map` | `fixed` / `legacy` | `fixed` | `fixed`: template registers at `0x000-0x0FC`, controls from `0x100` in the order of the file. `legacy`: controls right after the template registers (from `0x050`) and `read_ctrl` + `stream_*` after them (layout of the old rp_dummy). See [App.md](App.md#register-map-of-the-dummy-module) |
 | `rp_host` | host name or IP | `rp-XXXXXX.local` | Board for `make upload` (written to `_settings.env` as `RPIP`) |
 | `ssh_opts` | ssh options | `-l root -p 22` | `RPOPTS` of `_settings.env` |
 | `scp_opts` | scp options | `-P 22` | `RPSCP` of `_settings.env` |
@@ -160,9 +162,9 @@ Unknown keys give a warning and are ignored.
 The section name is the **register name** in `dummy.v`, the C controller (`DUMMY_<NAME>`) and the web page
 (`dummy_<name>`). Letters, digits and `_`, starting with a letter; it must not be a Verilog/SystemVerilog, C, JavaScript
 or Python keyword, nor a name of the template (`in1`, `out1`, `oscA_sw`, `trig_sw`, `read_ctrl`, `clk`, `rst`,
-`cnt_clk`, `stream_*`... full list in `config_lib.py:1467-1480`). Two names that differ only in case are rejected.
+`cnt_clk`, `stream_*`... full list in `config_lib.py:1493-1506`). Two names that differ only in case are rejected.
 
-Control types (`config_lib.py:1452-1459`):
+Control types (`config_lib.py:1478-1485`):
 
 | `type` | Web element | `bits_number` | `signed` | In `dummy.v` | Notes |
 |---|---|---|---|---|---|
@@ -362,10 +364,10 @@ for the `.ini` of section 2 (a low-pass filter on a selectable input, a counter,
 Vivado 2020.1 simulator compiler, `xvlog` + `xelab`, without errors; not synthesized nor run on a board.)
 
 > `config_tool.py` recognizes a combo as the select of a muxer only when the instance is of a module whose name
-> contains `muxer` and its port is exactly `.sel( name )` (`get_muxer_inputs()`, `config_lib.py:1165-1188`). With an
+> contains `muxer` and its port is exactly `.sel( name )` (`get_muxer_inputs()`, `config_lib.py:1191-1214`). With an
 > expression such as `.sel({1'b0, source})` the combo shows the numbers: use a muxer whose `sel` width matches the
 > combo (`muxer3`/`muxer_reg3` = 3 bits, `muxer4`/`muxer_reg4` = 4 bits, `muxer5`/`muxer_reg5` = 5 bits) or give
-> `options` in the `.ini`. Inputs written as `14'b0` are shown as `0` (`parse_sw()`, `config_lib.py:1150`).
+> `options` in the `.ini`. Inputs written as `14'b0` are shown as `0` (`parse_sw()`, `config_lib.py:1176`).
 
 To see your signals in the oscilloscope, connect them to free inputs of the scope muxers, e.g. in `i_muxer5_scope1`
 replace `.in3 ( 14'b0 )` by `.in3 ( filt_sig )`; after `config_tool.py -a` the Osc A combo shows "filt_sig" (or the text
@@ -413,7 +415,7 @@ or `make upload` with `RPIP` set in `_settings.env`. Close the App on the board 
 `resources/logo.svg` of the project is a generic logo with a text element `id="AppName"` (placeholder
 `APP NAME LONG`). `new_project.py` (step 5/6) writes the App name there and renders a 100x100 PNG to
 `resources/logo.png`, copied to `<App>/info/icon.png` (the icon of the App in the Red Pitaya menu). Long names get a
-smaller font, two lines or an ellipsis (`config_lib.py:2183-2220`). Renderers, in order: Python module `cairosvg`,
+smaller font, two lines or an ellipsis (`config_lib.py:2209-2246`). Renderers, in order: Python module `cairosvg`,
 `rsvg-convert`, `inkscape` (`--icon-tool` forces one). Without any of them a warning says what to install
 (`pip install cairosvg`, `sudo apt install librsvg2-bin` or `sudo apt install inkscape`) and the generic logo is used.
 
@@ -430,10 +432,10 @@ To change the logo, edit `resources/logo.svg` (keep the element with `id="AppNam
 validation as `new_project.py`). The code you wrote outside the docks is not touched. Running it twice without changes
 leaves the files unchanged (tested in `tests/generator_test.py`).
 
-| Option | What it writes (`config_tool.py:3-19`) |
+| Option | What it writes (`config_tool.py:3-20`) |
 |---|---|
-| `-v`, `--do-verilog` | `fpga/prj/v0.94/rtl/dummy.v`: declarations, bus read/write, `ADDED REGS` list |
-| `-m`, `--do-main` | `src/`: register struct (`fpga_dummy.h`, padded to the fixed addresses with `_Static_assert`), parameter table (`main.c`, `main.h`), FPGA <-> parameters copy (`dummy.c`, `fpga_dummy.c`), mapped size `DUMMY_BASE_SIZE` |
+| `-v`, `--do-verilog` | `fpga/prj/v0.94/rtl/dummy.v`: declarations, bus read/write (registered read copies of the read-only registers, `BUS READ COPIES`), `ADDED REGS` list |
+| `-m`, `--do-main` | `src/`: register struct (`fpga_dummy.h`, padded to the fixed addresses with `_Static_assert`), parameter table (`main.c`, `main.h`), FPGA <-> parameters copy (`dummy.c`, `fpga_dummy.c`), mapped size `DUMMY_BASE_SIZE`; `c/`: register table of `c/dummy` (`c/dummy.c`), `c/dummy.txt` (CSV), `c/app_regs.h` (offsets for the streaming tools) |
 | `-w`, `--do-html` | `index.html`: panels of the controls and monitors, JS lists of controls, monitor scales/units |
 | `-p`, `--do-python` | `py/hugo.py`: register list for Python scripts running on the board |
 | `-t`, `--do-tcl` | Vivado scripts: files of `fpga/prj/v0.94/rtl/dummy/` with the modules instantiated in `dummy.v` |
@@ -443,14 +445,14 @@ leaves the files unchanged (tested in `tests/generator_test.py`).
 | `-l`, `--logo` | Logo only (not part of `-a`): App name on `../resources/logo.svg` -> `logo.png`, `info/icon.png` |
 
 Exit status: 0 OK (also "nothing to do" without options), 1 error in `app.ini`, 2 bad `--rename`
-(`config_tool.py:99-103, 205-216`).
+(`config_tool.py:100-104, 205-216`).
 
 ### 5.1 Modules -> tcl scripts (`-t`)
 
 The instances in `dummy.v` (comments ignored) are resolved to files of `fpga/prj/v0.94/rtl/dummy/`, recursively inside
 those modules, and only those files are listed in the automatic blocks of `fpga/red_pitaya_vivado_Z10.tcl` (Vivado 2020.1)
-and `fpga_eco1/red_pitaya_vivado.tcl` / `red_pitaya_vivado_project.tcl` (2015.2) (`config_tool.py:432-459`,
-`config_lib.py:2093`). The `.dat` files (memory contents) are always included. Real output after adding a counter, a
+and `fpga_eco1/red_pitaya_vivado.tcl` / `red_pitaya_vivado_project.tcl` (2015.2) (`config_tool.py:452-479`,
+`config_lib.py:2119`). The `.dat` files (memory contents) are always included. Real output after adding a counter, a
 filter and a muxer:
 
 ```
@@ -466,7 +468,7 @@ a module whose name clashes with the RedPitaya design (e.g. `debounce`: that is 
 ### 5.2 Changes of `app.ini`
 
 Before writing, the registers of the last generation (the `ADDED REGS` block of `dummy.v`) are compared with `app.ini`
-(`config_lib.py:1873`). Real output after removing `[numberB]` and renaming `[monitorD]` to `[monitorE]` in the App of
+(`config_lib.py:1899`). Real output after removing `[numberB]` and renaming `[monitorD]` to `[monitorE]` in the App of
 the example `config.ini`:
 
 ```
@@ -489,17 +491,17 @@ register is reported, and it keeps being reported (it is remembered in the `ADDE
 ```
 $ ./my_app/config_tool.py -a --rename monitorD:monitorE
 --rename monitorD:monitorE: 2 replacement(s) in fpga/prj/v0.94/rtl/dummy.v
-WARNING: fpga/prj/v0.94/rtl/dummy.v:144: uses a register removed from app.ini: .in0(14'b0), .in1(in1), .in2(in1_slow), .in3(numberA), .in4(numberB),
-WARNING: fpga/prj/v0.94/rtl/dummy.v:152: uses a register removed from app.ini: assign monitorE = {{13{numberB[13]}}, numberB} ;
+WARNING: fpga/prj/v0.94/rtl/dummy.v:149: uses a register removed from app.ini: .in0(14'b0), .in1(in1), .in2(in1_slow), .in3(numberA), .in4(numberB),
+WARNING: fpga/prj/v0.94/rtl/dummy.v:157: uses a register removed from app.ini: assign monitorE = {{13{numberB[13]}}, numberB} ;
          (remove or change that code; if the control was renamed, use --rename OLD:NEW)
 ```
 
 `--rename OLD:NEW` requires that `app.ini` already has `[NEW]` and no longer has `[OLD]`. It replaces whole words in
-`dummy.v`, `dummy_OLD` in `index.html` and `DUMMY_OLD` / `dummy_old` / `->old` in `src/` (`config_lib.py:1972`).
+`dummy.v`, `dummy_OLD` in `index.html` and `DUMMY_OLD` / `dummy_old` / `->old` in `src/` (`config_lib.py:1998`).
 
 ### 5.3 Texts of the combo boxes
 
-For each combo of `app.ini` (`config_tool.py:369-377`):
+For each combo of `app.ini` (`config_tool.py:389-397`):
 
 1. `options = ...` of `app.ini`, if given;
 2. else, if the register is the `.sel` of a muxer in `dummy.v`, one option per muxer input (up to `2^bits_number`),
@@ -507,7 +509,7 @@ For each combo of `app.ini` (`config_tool.py:369-377`):
 3. else the numbers `0 .. 2^bits_number - 1`.
 
 The template selects (Osc A/B, Out1/2, Slow out 3/4) follow rule 2. An output select whose muxer is not in `dummy.v`
-(Slow out 1/2 in the template) shows a single option `0 (no muxer in dummy.v)` (`config_tool.py:351-359`). The Ext Trig
+(Slow out 1/2 in the template) shows a single option `0 (no muxer in dummy.v)` (`config_tool.py:371-379`). The Ext Trig
 select keeps the options written by hand in `index.html` (see [App.md](App.md#external-trigger)).
 
 Real example: a `muxer4` with `.sel(comboA)` and inputs `14'b0, in1, in1_slow, numberA, numberB, 14'b0...`, with

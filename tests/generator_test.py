@@ -245,6 +245,30 @@ class Generated(unittest.TestCase):
         self.assertNotIn('DEBUG', r.stdout)
         self.assertNotIn('RELOAD', r.stdout)
 
+    # -- CP5: remote control tools of c/ and the App name in their paths
+    def test_remote_tools_paths(self):
+        prj, out = self.gen('rmt', '--no-icon')
+        app = os.path.join(prj, 'rmt')
+        c = sorted(os.listdir(os.path.join(app, 'c')))
+        for fn in ('Makefile', 'app_regs.h', 'dummy.c', 'dummy.txt', 'names_dic.txt', 'osc.c', 'osc.txt', 'regtool.h',
+                   'stream_start.sh', 'stream_tcp_osc_cmd.c', 'streaming.c'):
+            self.assertIn(fn, c)
+        for fn in ('dummy', 'osc', 'streaming', 'stream_tcp_osc_cmd'):   # binaries are never copied
+            self.assertNotIn(fn, c)
+        for fn in ('fpga.sh', 'nginx.conf', os.path.join('src', 'main.c')):
+            txt = read(os.path.join(app, fn))
+            self.assertNotIn('/apps/dummy/', txt, fn)
+            self.assertNotIn('/apps/dummy"', txt, fn)
+        self.assertIn('D=/opt/redpitaya/www/apps/rmt/c', read(os.path.join(app, 'fpga.sh')))
+        self.assertIn('#define APP_DIR "/opt/redpitaya/www/apps/rmt"', read(os.path.join(app, 'src', 'main.c')))
+        ng = read(os.path.join(app, 'nginx.conf'))
+        self.assertIsNone(re.search(r'location = /dummy/', ng))
+        for loc in ('dummy', 'osc', 'streaming', 'check_streaming', 'get_ip', 'calib'):
+            self.assertIn(f'location = /rmt/{loc} ', ng)
+        r = run(['make', '-n', '-C', app, 'zip', 'BUILD_NUMBER=7'])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('-C c all', r.stdout)
+
     # -- config_tool.py tasks
     def test_config_tool_tasks(self):
         prj, out = self.gen('cfgt', '--no-icon')

@@ -23,6 +23,7 @@
 
 #include "worker.h"
 #include "fpga.h"
+#include "fpga_dummy.h"
 
 pthread_t *rp_osc_thread_handler = NULL;
 void *rp_osc_worker_thread(void *args);
@@ -253,15 +254,24 @@ static int rp_osc_acq_params_same(const rp_app_params_t *a, const rp_app_params_
     return 1;
 }
 
+/* Streaming of the scope in progress: stream_cmd of the dummy module != 0 (c/dummy, HTTP /dummy). Then
+ * c/stream_tcp_osc_cmd owns the scope (it resets, arms and reads it): the worker must not touch it. */
+static int rp_osc_streaming(void)
+{
+    return (g_dummy_reg != NULL) && (*(volatile uint32_t *)&g_dummy_reg->stream_cmd != 0);
+}
+
 /* Called with rp_osc_ctrl_mutex locked while an acquisition is in progress: if the new parameters do not
- * change the acquisition, take them (curr_params) and clear the 'dirty' flag. Returns the flag left. */
+ * change the acquisition, take them (curr_params) and clear the 'dirty' flag (also returns 1 while a
+ * streaming is on). Returns the flag left. */
 static int rp_osc_absorb_params(rp_app_params_t **curr_params)
 {
     if(rp_osc_params_dirty && rp_osc_acq_params_same(rp_osc_params, *curr_params)) {
         rp_copy_params(rp_osc_params, curr_params);
         rp_osc_params_dirty = 0;
     }
-    return rp_osc_params_dirty;
+    /* a streaming that starts also ends the wait (the loop then leaves the scope alone) */
+    return rp_osc_params_dirty || rp_osc_streaming();
 }
 
 
@@ -274,6 +284,7 @@ void *rp_osc_worker_thread(void *args)
     int                   time_vect_update = 0;
     uint32_t              trig_source = 0;
     int                   params_dirty = 0;
+    int                   stream_was_on = 0;  /* stream_cmd was != 0 (see the loop) */
 
     /* Long acquisition special function */
     int long_acq = 0; /* long_acq if acq_time > 1 [s] */
@@ -330,6 +341,31 @@ void *rp_osc_worker_thread(void *args)
         if(state == rp_osc_quit_state) {
             rp_clean_params(curr_params);
             return 0;
+        }
+
+        /* While streaming (stream_cmd != 0) c/stream_tcp_osc_cmd owns the scope: do not reset, arm or
+         * configure it here (from rp_lock-in_pid_h v2.3.10). The settings of the page are applied again when
+         * the streaming stops. */
+        if(rp_osc_streaming()) {
+            stream_was_on = 1;
+            usleep(10000);
+            continue;
+        }
+        /* stream_cmd went 1 -> 0 (stop): c/stream_tcp_osc_cmd ends by itself after its current read. Wait for
+         * it (at least 50 ms, at most 500 ms) so that the scope is not reconfigured under its last read; then
+         * the scope gets the settings of the page again. */
+        if(stream_was_on) {
+            int w;
+            stream_was_on = 0;
+            usleep(50000);
+            for(w = 0; w < 45 && stream_tcp_alive() > 0; w++)
+                usleep(10000);
+            if(stream_tcp_alive() > 0)
+                fprintf(stderr, "worker: c/stream_tcp_osc_cmd still running 0.5 s after stream_cmd = 0\n");
+            fpga_update = 1;
+            time_vect_update = 1;
+            long_acq_idx = 0;
+            continue;
         }
 
 

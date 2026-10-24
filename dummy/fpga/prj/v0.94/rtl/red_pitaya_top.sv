@@ -835,7 +835,7 @@ red_pitaya_daisy  #(
     .pwm_cfg_b        (dummy_pwm_b   ),
     .pwm_cfg_c        (dummy_pwm_c   ),
     .pwm_cfg_d        (dummy_pwm_d   ),
-    .osc_ctrl         (dummy_osc_ctrl),
+    .osc_ctrl_w       (dummy_osc_ctrl),
     .sys_addr         (sys[6].addr   ),
     .sys_wdata        (sys[6].wdata  ),
     .sys_sel          (4'b1111       ),

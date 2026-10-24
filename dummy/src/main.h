@@ -211,6 +211,8 @@ int rp_update_main_params(rp_app_params_t *params);
 void rp_auto_set_aborted(void);
 /* auto-set failed (no trigger in time): clears auto_flag and applies the current parameters again */
 void rp_auto_set_failed(void);
+/* number of c/stream_tcp_osc_cmd processes of this App alive (main.c) */
+int stream_tcp_alive(void);
 void get_scales(rp_app_params_t *p, float *scale1, float *scale2, float *maxv);
 void transform_to_iface_units(rp_app_params_t *p);
 void transform_from_iface_units(rp_app_params_t *p);

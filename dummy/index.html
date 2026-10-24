@@ -3170,7 +3170,7 @@
     $('#trig_source').val(params.original.trig_source);
     $('#trig_edge').val(params.original.trig_edge);
     var scale = (params.original.trig_source == 0 ? params.original.scale_ch1 : params.original.scale_ch2);
-    $('#trig_level').val(floatToLocalString(params.original.trig_level * scale));
+    $('#trig_level').val(floatToLocalString(roundLevel(params.original.trig_level * scale)));
 
     if ((refresh_counter++ % meas_panel_dec) == 0) {
         $('#info_ch1_min').html(floatToLocalString(shortenFloat(params.original.meas_min_ch1)));
@@ -4087,7 +4087,7 @@
 
     if(y === undefined) {
       if(update_input !== false) {
-        $('#trig_level').not(':focus').val(floatToLocalString(tlev));
+        $('#trig_level').not(':focus').val(floatToLocalString(roundLevel(tlev)));
       }
       y = plot.getAxes().yaxis.p2c(tlev);
     }
@@ -4337,6 +4337,11 @@
 
   function parseLocalFloat(num) {
     return +(String(num).replace(',', '.'));
+  }
+
+  // Trigger level shown in its field: 4 decimals (e.g. the level computed by AUTO, 0.000244140625 -> 0.0002)
+  function roundLevel(v) {
+    return (typeof v == 'number' && isFinite(v)) ? +v.toFixed(4) : v;
   }
 
   function floatToLocalString(num) {

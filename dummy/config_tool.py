@@ -8,6 +8,7 @@ control of app.ini. From them this script writes:
 
   -v  fpga/prj/v0.94/rtl/dummy.v   reg/wire declarations, bus write/read logic, list of the added registers
   -m  src/*.c, src/*.h         C controller: register struct, parameters table, FPGA <-> parameters copy
+      c/dummy.c, c/app_regs.h  remote control tools: register table, offsets (and c/dummy.txt)
   -w  index.html               panels of the controls and monitors, JS lists of controls, LOADPARAMS
   -p  py/hugo.py               register list for remote access from Python
   -t  fpga/*.tcl, fpga_eco1/*.tcl   files of fpga/prj/v0.94/rtl/dummy/ with the modules instantiated in dummy.v
@@ -143,7 +144,7 @@ f = fpga_registers()
 grp='scope'
 f.add( name="oscA_sw"            , group=grp , val=    1, rw=True ,  nbits= 5, min_val=          0, max_val=         31, fpga_update=True , signed=False, desc="switch for muxer oscA" )
 f.add( name="oscB_sw"            , group=grp , val=    2, rw=True ,  nbits= 5, min_val=          0, max_val=         31, fpga_update=True , signed=False, desc="switch for muxer oscB" )
-f.add( name="osc_ctrl"           , group=grp , val=    3, rw=True ,  nbits= 2, min_val=          0, max_val= 4294967295, fpga_update=True , signed=False, desc="oscilloscope control\n[osc2_filt_off,osc1_filt_off]" )
+f.add( name="osc_ctrl"           , group=grp , val=    3, rw=True ,  nbits= 2, min_val=          0, max_val=          3, fpga_update=True , signed=False, desc="oscilloscope control\n[osc2_filt_off,osc1_filt_off]" )
 f.add( name="trig_sw"            , group=grp , val=    0, rw=True ,  nbits= 8, min_val=          0, max_val=        255, fpga_update=True , signed=False, desc="Select the external trigger signal" )
 
 # Outputs
@@ -161,15 +162,24 @@ f.add( name="in1"                , group=grp , val=    0, rw=False,  nbits=14, m
 f.add( name="in2"                , group=grp , val=    0, rw=False,  nbits=14, min_val=      -8192, max_val=       8191, fpga_update=True , signed=True , desc="Input signal IN2" )
 f.add( name="out1"               , group=grp , val=    0, rw=False,  nbits=14, min_val=      -8192, max_val=       8191, fpga_update=True , signed=True , desc="signal for RP RF DAC Out1" )
 f.add( name="out2"               , group=grp , val=    0, rw=False,  nbits=14, min_val=      -8192, max_val=       8191, fpga_update=True , signed=True , desc="signal for RP RF DAC Out2" )
-f.add( name="slow_out1"          , group=grp , val=    0, rw=False,  nbits=12, min_val=      -2048, max_val=       2047, fpga_update=True , signed=False, desc="signal for RP slow DAC 1" )
-f.add( name="slow_out2"          , group=grp , val=    0, rw=False,  nbits=12, min_val=      -2048, max_val=       2047, fpga_update=True , signed=False, desc="signal for RP slow DAC 2" )
-f.add( name="slow_out3"          , group=grp , val=    0, rw=False,  nbits=12, min_val=      -2048, max_val=       2047, fpga_update=True , signed=False, desc="signal for RP slow DAC 3" )
-f.add( name="slow_out4"          , group=grp , val=    0, rw=False,  nbits=12, min_val=      -2048, max_val=       2047, fpga_update=True , signed=False, desc="signal for RP slow DAC 4" )
+f.add( name="slow_out1"          , group=grp , val=    0, rw=False,  nbits=12, min_val=          0, max_val=       4095, fpga_update=True , signed=False, desc="signal for RP slow DAC 1" )
+f.add( name="slow_out2"          , group=grp , val=    0, rw=False,  nbits=12, min_val=          0, max_val=       4095, fpga_update=True , signed=False, desc="signal for RP slow DAC 2" )
+f.add( name="slow_out3"          , group=grp , val=    0, rw=False,  nbits=12, min_val=          0, max_val=       4095, fpga_update=True , signed=False, desc="signal for RP slow DAC 3" )
+f.add( name="slow_out4"          , group=grp , val=    0, rw=False,  nbits=12, min_val=          0, max_val=       4095, fpga_update=True , signed=False, desc="signal for RP slow DAC 4" )
 f.add( name="oscA"               , group=grp , val=    0, rw=False,  nbits=14, min_val=      -8192, max_val=       8191, fpga_update=True , signed=True , desc="signal for Oscilloscope Channel A" )
 f.add( name="oscB"               , group=grp , val=    0, rw=False,  nbits=14, min_val=      -8192, max_val=       8191, fpga_update=True , signed=True , desc="signal for Oscilloscope Channel B" )
 
 def add_read_ctrl(index=None):
     f.add( name="read_ctrl"      , group='aux', val=    0, rw=True ,  nbits= 3, min_val=          0, max_val=          7, fpga_update=True , signed=False, desc="[unused,start_clk,Freeze]", index=index )
+    # Streaming of the scope (c/streaming + c/stream_tcp_osc_cmd): written by the c/ tools / HTTP /dummy, not
+    # parameters of the controller (a POST of the page must not stop a streaming)
+    grp='streaming'
+    f.add( name="stream_ip"      , group=grp  , val=    0, rw=True ,  nbits=32, min_val=          0, max_val= 4294967295, fpga_update=True , signed=False, desc="Client IP for streaming (a.b.c.d = a + b<<8 + c<<16 + d<<24)" )
+    f.add( name="stream_port"    , group=grp  , val= 6000, rw=True ,  nbits=32, min_val=          0, max_val=      65535, fpga_update=True , signed=False, desc="Client TCP port for streaming" )
+    f.add( name="stream_rate"    , group=grp  , val=  128, rw=True ,  nbits=17, min_val=          0, max_val=     131071, fpga_update=True , signed=False, desc="Decimation of the scope while streaming" )
+    f.add( name="stream_cmd"     , group=grp  , val=    0, rw=True ,  nbits=32, min_val=          0, max_val= 4294967295, fpga_update=True , signed=False, desc="Streaming command (!= 0: streaming on)" )
+    for n in ('stream_ip', 'stream_port', 'stream_rate', 'stream_cmd'):
+        f[n].no_param = True
 
 # fixed map: the template registers end at 0x0FC, so the addresses above do not depend on app.ini
 if cfg.register_map == 'fixed':
@@ -190,8 +200,10 @@ if cfg.register_map == 'legacy':
 for r in f:
     if r.ro:
         r.fpga_update=False
+        r.rd_copy=True    # the bus reads a registered copy (see BUS READ COPIES dock of dummy.v)
 
-for i in ['osc_ctrl','in1','in2','out1','out2']:
+# ports of the dummy module (declared in its port list)
+for i in ['in1','in2','out1','out2']:
     f[i].write_def=False
 
 
@@ -251,7 +263,8 @@ if __name__ == '__main__' and args.do_verilog:
 m = main_registers(num_base=81)
 
 for r in f:
-    m.add(r)
+    if not r.no_param:
+        m.add(r)
 
 m.insert_reg("dummy_osc_ctrl",
              main_register(name="dummy_osc1_filt_off", val=1, rw=True,
@@ -306,6 +319,13 @@ if __name__ == '__main__' and args.do_main:
     # Size of the mapped register area: whole 4 kB pages covering every register
     size = max(0x1000, (f.end_addr() + 0xFFF) & ~0xFFF)
     update_c_define(os.path.join('src','fpga_dummy.h'), 'DUMMY_BASE_SIZE', f'0x{size:X}')
+    # remote control tools of the App (c/): register table of c/dummy, offsets for the streaming tools
+    update_main(os.path.join('c','dummy.c'), dock=['DUMMYREGS'], txt=[c_regs_table(f)])
+    with open(os.path.join('c','app_regs.h'), 'w') as fd:
+        fd.write(c_app_regs_h(f, size))
+    with open(os.path.join('c','dummy.txt'), 'w') as fd:
+        fd.write(c_regs_txt(f))
+    print('Writing c/dummy.c, c/app_regs.h, c/dummy.txt')
     print('\n')
 
 

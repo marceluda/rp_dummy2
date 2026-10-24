@@ -6,6 +6,10 @@ _settings.env
 _build_number
 dummy/target/
 dummy/src/obj/
+dummy/c/dummy
+dummy/c/osc
+dummy/c/streaming
+dummy/c/stream_tcp_osc_cmd
 dummy/fpga.bit
 dummy/fpga.bit.bin
 dummy/fpga.bif

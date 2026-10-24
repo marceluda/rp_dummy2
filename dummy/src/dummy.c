@@ -113,6 +113,10 @@ int dummy_update(rp_app_params_t *params)
   //g_dummy_reg->oscA                      = (int)params[DUMMY_OSCA                    ].value;
   //g_dummy_reg->oscB                      = (int)params[DUMMY_OSCB                    ].value;
     g_dummy_reg->read_ctrl                 = (int)params[DUMMY_READ_CTRL               ].value;
+  //g_dummy_reg->stream_ip                   (not a controller parameter: written by the c/ tools)
+  //g_dummy_reg->stream_port                 (not a controller parameter: written by the c/ tools)
+  //g_dummy_reg->stream_rate                 (not a controller parameter: written by the c/ tools)
+  //g_dummy_reg->stream_cmd                  (not a controller parameter: written by the c/ tools)
   // [FPGAUPDATE DOCK END]
 
     return 0;

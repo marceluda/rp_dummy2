@@ -619,7 +619,7 @@ dummy i_dummy (
   .pwm_cfg_b(pwm_cfg_b),
   .pwm_cfg_c(pwm_cfg_c),
   .pwm_cfg_d(pwm_cfg_d),
-  .osc_ctrl(osc_ctrl),
+  .osc_ctrl_w(osc_ctrl),
 
   // System bus
   .sys_addr        (  sys_addr                   ),  // address

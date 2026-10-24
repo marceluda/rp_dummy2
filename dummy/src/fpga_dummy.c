@@ -98,6 +98,10 @@ void reset_locks(void)
         g_dummy_reg->oscA                 =      0;
         g_dummy_reg->oscB                 =      0;
         g_dummy_reg->read_ctrl            =      0;
+        g_dummy_reg->stream_ip            =      0;
+        g_dummy_reg->stream_port          =   6000;
+        g_dummy_reg->stream_rate          =    128;
+        g_dummy_reg->stream_cmd           =      0;
     }
 }
 // [FPGARESET DOCK END]
